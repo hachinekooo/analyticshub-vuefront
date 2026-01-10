@@ -1,0 +1,45 @@
+# System & IDE
+.DS_Store
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build Output
+dist
+dist-ssr
+coverage
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local Env Files
+*.local
+
+# Tooling
+.eslintcache
+
+# Testing
+cypress/videos/
+cypress/screenshots/
+__screenshots__/
+
+.DS_Store
+.idea
+.vscode
+*.log
+node_modules
