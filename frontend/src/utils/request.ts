@@ -1,45 +1,59 @@
-import axios from 'axios'
+import axios, { type AxiosError } from 'axios'
 import type { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import { ElMessage } from 'element-plus'
+import router from '@/router'
+
+type ErrorPayload = {
+  error?: { message?: string }
+  message?: string
+}
 
 const service = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
   timeout: 10000
 })
 
-// Request interceptor
 service.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Check for token in URL first (first access)
-    const urlParams = new URLSearchParams(window.location.search)
-    const tokenFromUrl = urlParams.get('token')
-
-    if (tokenFromUrl) {
-      localStorage.setItem('admin_token', tokenFromUrl)
-    }
-
     const token = localStorage.getItem('admin_token')
     if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`
+      // Admin API requires header token; query/body tokens are rejected server-side.
+      config.headers['X-Admin-Token'] = token
     }
     return config
   },
-  (error: any) => {
+  (error: unknown) => {
     return Promise.reject(error)
   }
 )
 
-// Response interceptor
 service.interceptors.response.use(
   (response: AxiosResponse) => {
     return response
   },
-  (error: any) => {
-    console.error('Request Error:', error)
-    if (error.response && error.response.status === 401) {
-      console.warn('Unauthorized access. Redirecting to login.')
+  (error: unknown) => {
+    const axiosError = error as AxiosError<ErrorPayload>
+    const status = axiosError.response?.status
+
+    const errorMessage =
+      axiosError.response?.data?.error?.message ||
+      axiosError.response?.data?.message ||
+      axiosError.message ||
+      '网络请求失败'
+
+    if (status === 401) {
+      // Token invalid/expired: clear and force re-login so the admin flow is consistent.
       localStorage.removeItem('admin_token')
-      window.location.href = '/login'
+      ElMessage.error('登录已过期，请重新登录')
+
+      if (router.currentRoute.value.path !== '/login') {
+        const redirect = router.currentRoute.value.fullPath
+        router.push({ path: '/login', query: { redirect } })
+      }
+    } else {
+      ElMessage.error(errorMessage)
     }
+
     return Promise.reject(error)
   }
 )

@@ -1,6 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import AdminDashboard from '../views/AdminDashboard.vue'
-import LoginView from '../views/LoginView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -9,13 +7,13 @@ const router = createRouter({
       path: '/',
       name: 'home',
       alias: '/admin',
-      component: AdminDashboard,
+      component: () => import('../views/AdminDashboard.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/login',
       name: 'login',
-      component: LoginView
+      component: () => import('../views/LoginView.vue')
     }
   ],
 })
@@ -23,10 +21,9 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('admin_token')
   
+  // Lightweight auth gate: redirect to login and preserve the target path.
   if (to.meta.requiresAuth && !token) {
-    next('/login')
-  } else if (to.path === '/login' && token) {
-    next('/')
+    next({ path: '/login', query: { redirect: to.fullPath } })
   } else {
     next()
   }
