@@ -1,75 +1,64 @@
 import request from '@/utils/request'
 
+export interface ApiResponse<T> {
+  success: boolean
+  data: T
+  message?: string
+  error?: {
+    code?: string
+    message?: string
+  }
+  timestamp?: string
+}
+
 export interface ProjectHealth {
-  connected: boolean;
+  connected: boolean
   tables: {
-    devices: boolean;
-    events: boolean;
-    sessions: boolean;
-    traffic_metrics: boolean;
-  };
-  allTablesExist: boolean;
+    devices: boolean
+    events: boolean
+    sessions: boolean
+    traffic_metrics: boolean
+  }
+  allTablesExist: boolean
 }
 
 export interface Project {
-  id: string; // Internal UUID usually, but here likely the DB ID or similar. 
-  // User provided guide says: project_id (unique string), project_name, etc.
-  // Let's match the interface to what the API actually returns based on the user's HTML example.
-  project_id: string;
-  project_name: string;
-  db_host: string;
-  db_port: number;
-  db_name: string;
-  db_user: string;
-  db_password?: string; // Optional in response?
-  table_prefix: string;
-  is_active: boolean;
+  id: string
+  project_id: string
+  project_name: string
+  db_host: string
+  db_port: number
+  db_name: string
+  db_user: string
+  db_password?: string
+  table_prefix: string
+  is_active: boolean
   
-  // UI helper props
-  health?: ProjectHealth | null;
-  healthLoading?: boolean;
+  health?: ProjectHealth | null
+  healthLoading?: boolean
 }
 
+// Admin endpoints are protected by X-Admin-Token (added in the request interceptor).
 export const getProjects = () => {
-  return request({
-    url: '/api/admin/projects',
-    method: 'get'
-  })
+  return request.get<ApiResponse<Project[]>>('/api/admin/projects')
 }
 
-export const createProject = (data: any) => {
-  return request({
-    url: '/api/admin/projects',
-    method: 'post',
-    data
-  })
+export const createProject = (data: Partial<Project>) => {
+  return request.post<ApiResponse<Project>>('/api/admin/projects', data)
 }
 
-export const updateProject = (id: string, data: any) => {
-  return request({
-    url: `/api/admin/projects/${id}`,
-    method: 'put',
-    data
-  })
+export const updateProject = (id: string, data: Partial<Project>) => {
+  return request.put<ApiResponse<Project>>(`/api/admin/projects/${id}`, data)
 }
 
 export const deleteProject = (id: string) => {
-  return request({
-    url: `/api/admin/projects/${id}`,
-    method: 'delete'
-  })
+  return request.delete<ApiResponse<null>>(`/api/admin/projects/${id}`)
 }
 
 export const checkProjectHealth = (id: string) => {
-  return request({
-    url: `/api/admin/projects/${id}/health`,
-    method: 'get'
-  })
+  return request.get<ApiResponse<ProjectHealth>>(`/api/admin/projects/${id}/health`)
 }
 
 export const initProjectDatabase = (id: string) => {
-  return request({
-    url: `/api/admin/projects/${id}/init`,
-    method: 'post'
-  })
+  return request.post<ApiResponse<null>>(`/api/admin/projects/${id}/init`)
 }
