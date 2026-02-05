@@ -29,6 +29,11 @@ lerna-debug.log*
 
 # Local Env Files
 *.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Tooling
 .eslintcache
