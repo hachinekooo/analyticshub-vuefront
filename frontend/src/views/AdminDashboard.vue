@@ -160,6 +160,16 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 
+type ErrorPayload = {
+  error?: { message?: string }
+  message?: string
+}
+
+const getErrorMessage = (err: unknown, fallback: string) => {
+  const e = err as { response?: { data?: ErrorPayload } }
+  return e.response?.data?.error?.message || e.response?.data?.message || fallback
+}
+
 const getEmptyForm = (): Partial<Project> => ({
   project_id: '',
   project_name: '',
@@ -178,11 +188,11 @@ const loadProjects = async () => {
   loading.value = true
   try {
     const res = await getProjects()
-    projects.value = res.data.data.map((p: any) => ({ ...p, health: null, healthLoading: false }))
-    // Check health for all
+    projects.value = res.data.data.map((p) => ({ ...p, health: null, healthLoading: false }))
+    // Trigger health checks after list load to avoid blocking initial render.
     projects.value.forEach(p => handleCheckHealth(p))
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.error?.message || 'Failed to load projects')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, 'Failed to load projects'))
   } finally {
     loading.value = false
   }
@@ -193,7 +203,8 @@ const handleCheckHealth = async (project: Project) => {
   try {
     const res = await checkProjectHealth(project.id)
     project.health = res.data.data
-  } catch (error) {
+  } catch {
+    // Fallback state keeps UI consistent when the health endpoint fails.
     project.health = { 
       connected: false, 
       tables: { devices: false, events: false, sessions: false, traffic_metrics: false }, 
@@ -212,10 +223,8 @@ const showAddDialog = () => {
 
 const handleEditProject = (project: Project) => {
   isEdit.value = true
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { db_password, ...rest } = project
-  // We don't want to show the encrypted password or undefined, leave it empty for user to input new one if needed
-  form.value = { ...rest, db_password: '' }
+  // Leave password empty so the backend can keep it unchanged.
+  form.value = { ...project, db_password: '' }
   dialogVisible.value = true
 }
 
@@ -232,8 +241,8 @@ const saveProject = async () => {
     }
     dialogVisible.value = false
     loadProjects()
-  } catch (error: any) {
-    ElMessage.error(error.response?.data?.error?.message || 'Failed to save project')
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, 'Failed to save project'))
   }
 }
 
@@ -248,9 +257,9 @@ const handleInitDatabase = async (project: Project) => {
     const res = await initProjectDatabase(project.id)
     ElMessage.success(res.data.message || 'Initialization successful')
     handleCheckHealth(project)
-  } catch (error: any) {
+  } catch (error) {
       if (error !== 'cancel') {
-         ElMessage.error(error.response?.data?.error?.message || 'Initialization failed')
+         ElMessage.error(getErrorMessage(error, 'Initialization failed'))
       }
   }
 }
@@ -266,9 +275,9 @@ const handleDeleteProject = async (project: Project) => {
     await deleteProject(project.id)
     ElMessage.success('Project deleted successfully')
     loadProjects()
-  } catch (error: any) {
+  } catch (error) {
     if (error !== 'cancel') {
-        ElMessage.error(error.response?.data?.error?.message || 'Deletion failed')
+        ElMessage.error(getErrorMessage(error, 'Deletion failed'))
     }
   }
 }

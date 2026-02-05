@@ -1,19 +1,39 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { validateAdminToken } from '@/api/auth'
 
 const token = ref('')
 const router = useRouter()
+const route = useRoute()
 const error = ref('')
+const loading = ref(false)
 
-const handleLogin = () => {
+const handleLogin = async () => {
   if (!token.value) {
     error.value = '请输入管理员 Token'
     return
   }
   
-  localStorage.setItem('admin_token', token.value)
-  router.push('/')
+  loading.value = true
+  error.value = ''
+  
+  try {
+    await validateAdminToken(token.value)
+    // Persist admin token for subsequent API calls and route guard checks.
+    localStorage.setItem('admin_token', token.value)
+    const redirect = route.query.redirect
+    router.push(typeof redirect === 'string' ? redirect : '/')
+  } catch (err) {
+    const axiosError = err as { response?: { data?: { error?: { message?: string }; message?: string } }; message?: string }
+    error.value =
+      axiosError.response?.data?.error?.message ||
+      axiosError.response?.data?.message ||
+      axiosError.message ||
+      '网络错误或Token无效'
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -34,8 +54,8 @@ const handleLogin = () => {
         <p v-if="error" class="error-msg">{{ error }}</p>
       </div>
       
-      <button @click="handleLogin" class="login-btn">
-        Login
+      <button @click="handleLogin" class="login-btn" :disabled="loading">
+        {{ loading ? 'Logging in...' : 'Login' }}
       </button>
     </div>
   </div>
@@ -47,7 +67,7 @@ const handleLogin = () => {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background-color: #f5f5f7; /* Apple-like light gray */
+  background-color: #f5f5f7;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
