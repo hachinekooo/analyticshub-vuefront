@@ -5,7 +5,7 @@
 
 ## 目录结构
 - `frontend/`: 基于 Vue 3 + Vite 的前端应用核心代码。
-- `docs/`: 项目相关文档。
+- `docs/DEPLOYMENT.md`: 前端部署说明。
 
 ## 快速开始
 
