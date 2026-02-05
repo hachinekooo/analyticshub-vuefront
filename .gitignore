@@ -27,15 +27,11 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Local Env Files (keep example files tracked)
+# Local Env Files (only keep dev/prod examples tracked)
 .env
 .env.*
-!.env.example
-!.env.sample
-!.env.template
-!.env*.example
-!.env*.sample
-!.env*.template
+!.env.development.example
+!.env.production.example
 
 # Secrets & Credentials
 *.key
