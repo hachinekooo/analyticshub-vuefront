@@ -2,16 +2,19 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { validateAdminToken } from '@/api/auth'
+import { useI18n } from '@/i18n'
+import LanguageToggle from '@/components/LanguageToggle.vue'
 
 const token = ref('')
 const router = useRouter()
 const route = useRoute()
 const error = ref('')
 const loading = ref(false)
+const { t } = useI18n()
 
 const handleLogin = async () => {
   if (!token.value) {
-    error.value = '请输入管理员 Token'
+    error.value = t('login.emptyToken')
     return
   }
   
@@ -28,9 +31,7 @@ const handleLogin = async () => {
     const axiosError = err as { response?: { data?: { error?: { message?: string }; message?: string } }; message?: string }
     error.value =
       axiosError.response?.data?.error?.message ||
-      axiosError.response?.data?.message ||
-      axiosError.message ||
-      '网络错误或Token无效'
+      t('login.errorFallback')
   } finally {
     loading.value = false
   }
@@ -40,14 +41,17 @@ const handleLogin = async () => {
 <template>
   <div class="login-container">
     <div class="login-box">
-      <h1>Admin Login</h1>
-      <p class="subtitle">Enter your access token to continue</p>
+      <div class="login-lang">
+        <LanguageToggle />
+      </div>
+      <h1>{{ t('login.title') }}</h1>
+      <p class="subtitle">{{ t('login.subtitle') }}</p>
       
       <div class="form-group">
         <input 
           v-model="token" 
           type="password" 
-          placeholder="Access Token"
+          :placeholder="t('login.tokenPlaceholder')"
           @keyup.enter="handleLogin"
           class="token-input"
         />
@@ -55,7 +59,7 @@ const handleLogin = async () => {
       </div>
       
       <button @click="handleLogin" class="login-btn" :disabled="loading">
-        {{ loading ? 'Logging in...' : 'Login' }}
+        {{ loading ? t('login.loggingIn') : t('login.login') }}
       </button>
     </div>
   </div>
@@ -79,6 +83,13 @@ const handleLogin = async () => {
   width: 100%;
   max-width: 400px;
   text-align: center;
+  position: relative;
+}
+
+.login-lang {
+  position: absolute;
+  right: 16px;
+  top: 16px;
 }
 
 h1 {

@@ -1,11 +1,27 @@
 <template>
   <div class="admin-container">
     <div class="header-card">
-      <h1 class="header-title">📊 Analytics System</h1>
-      <el-button type="primary" size="large" @click="showAddDialog" class="add-btn">
-        <el-icon class="el-icon--left"><Plus /></el-icon>
-        Add Project
-      </el-button>
+      <div>
+        <h1 class="header-title">{{ t('dashboard.title') }}</h1>
+        <p class="header-subtitle">{{ t('dashboard.subtitle') }}</p>
+      </div>
+      <div class="header-actions">
+        <el-button-group class="nav-group">
+          <el-button :type="isProjectsRoute ? 'primary' : 'default'" @click="goProjects">
+            <el-icon class="el-icon--left"><FolderOpened /></el-icon>
+            {{ t('nav.projects') }}
+          </el-button>
+          <el-button :type="isMetricsRoute ? 'primary' : 'default'" @click="goMetrics">
+            <el-icon class="el-icon--left"><TrendCharts /></el-icon>
+            {{ t('nav.metrics') }}
+          </el-button>
+        </el-button-group>
+        <LanguageToggle />
+        <el-button type="primary" size="large" @click="showAddDialog" class="add-btn">
+          <el-icon class="el-icon--left"><Plus /></el-icon>
+          {{ t('buttons.addProject') }}
+        </el-button>
+      </div>
     </div>
 
     <div class="content-card">
@@ -15,19 +31,29 @@
 
       <div v-else-if="projects.length === 0" class="empty-state">
         <el-icon :size="64"><FolderOpened /></el-icon>
-        <p>No projects found. Click the button above to add one.</p>
+        <p>{{ t('dashboard.empty') }}</p>
       </div>
 
       <div v-else class="project-grid">
-        <div v-for="project in projects" :key="project.id" class="project-card">
+        <div
+          v-for="project in projects"
+          :key="project.id"
+          class="project-card clickable"
+          role="button"
+          @click="openProjectMetrics(project)"
+        >
           <div class="project-header">
             <div class="project-info">
-              <h3>{{ project.project_name }}</h3>
-              <p>ID: {{ project.project_id }} | DB: {{ project.db_name }} | Prefix: {{ project.table_prefix }}</p>
+              <h3>{{ project.projectName }}</h3>
+              <p>
+                {{ t('dashboard.labels.id') }}: {{ project.projectId }} |
+                {{ t('dashboard.labels.db') }}: {{ project.dbName }} |
+                {{ t('dashboard.labels.prefix') }}: {{ project.tablePrefix }}
+              </p>
             </div>
             <div>
-              <el-tag :type="project.is_active ? 'success' : 'info'" size="large" effect="light">
-                {{ project.is_active ? 'Active' : 'Inactive' }}
+              <el-tag :type="project.isActive ? 'success' : 'info'" size="large" effect="light">
+                {{ project.isActive ? t('status.active') : t('status.inactive') }}
               </el-tag>
             </div>
           </div>
@@ -36,106 +62,119 @@
             <span class="health-badge" :class="project.health.connected ? 'success' : 'error'">
               <el-icon v-if="project.health.connected"><Check /></el-icon>
               <el-icon v-else><Close /></el-icon>
-              Connection
+              {{ t('status.connection') }}
             </span>
             <span class="health-badge" :class="project.health.tables.devices ? 'success' : 'warning'">
-              {{ project.health.tables.devices ? '✓' : '✗' }} Devices
+              {{ project.health.tables.devices ? '✓' : '✗' }} {{ t('status.devices') }}
             </span>
             <span class="health-badge" :class="project.health.tables.events ? 'success' : 'warning'">
-              {{ project.health.tables.events ? '✓' : '✗' }} Events
+              {{ project.health.tables.events ? '✓' : '✗' }} {{ t('status.events') }}
             </span>
             <span class="health-badge" :class="project.health.tables.sessions ? 'success' : 'warning'">
-              {{ project.health.tables.sessions ? '✓' : '✗' }} Sessions
+              {{ project.health.tables.sessions ? '✓' : '✗' }} {{ t('status.sessions') }}
             </span>
-            <span class="health-badge" :class="project.health.tables.traffic_metrics ? 'success' : 'warning'">
-              {{ project.health.tables.traffic_metrics ? '✓' : '✗' }} Traffic
+            <span class="health-badge" :class="project.health.tables.trafficMetrics ? 'success' : 'warning'">
+              {{ project.health.tables.trafficMetrics ? '✓' : '✗' }} {{ t('status.traffic') }}
             </span>
           </div>
 
-          <div class="action-buttons">
+          <div class="action-buttons" @click.stop>
             <el-button size="small" @click="handleCheckHealth(project)" :loading="project.healthLoading" plain>
-              <el-icon class="el-icon--left"><View /></el-icon> Check Status
+              <el-icon class="el-icon--left"><View /></el-icon> {{ t('buttons.checkStatus') }}
             </el-button>
             <el-button size="small" type="success" @click="handleInitDatabase(project)"
                 v-if="project.health && !project.health.allTablesExist" plain>
-              <el-icon class="el-icon--left"><CirclePlus /></el-icon> Init Tables
+              <el-icon class="el-icon--left"><CirclePlus /></el-icon> {{ t('buttons.initTables') }}
             </el-button>
             <el-button size="small" type="primary" @click="handleEditProject(project)" plain>
-              <el-icon class="el-icon--left"><Edit /></el-icon> Edit
+              <el-icon class="el-icon--left"><Edit /></el-icon> {{ t('buttons.edit') }}
             </el-button>
             <el-button size="small" type="danger" @click="handleDeleteProject(project)"
-                v-if="project.project_id !== 'analytics-system'" plain>
-              <el-icon class="el-icon--left"><Delete /></el-icon> Delete
+                v-if="project.projectId !== 'analytics-system'" plain>
+              <el-icon class="el-icon--left"><Delete /></el-icon> {{ t('buttons.delete') }}
             </el-button>
+          </div>
+          <div class="card-footer">
+            {{ t('dashboard.viewMetrics') }}
+            <el-icon class="card-footer-icon"><ArrowRight /></el-icon>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Add/Edit Dialog -->
-    <el-dialog v-model="dialogVisible" :title="isEdit ? 'Edit Project' : 'Add Project'" width="600px" custom-class="project-dialog">
+    <el-dialog
+      v-model="dialogVisible"
+      :title="isEdit ? t('dialogs.editProject') : t('dialogs.addProject')"
+      width="600px"
+      custom-class="project-dialog"
+    >
       <el-form :model="form" label-position="top" label-width="120px">
         <el-row :gutter="20">
           <el-col :span="12">
-             <el-form-item label="Project ID">
-              <el-input v-model="form.project_id" :disabled="isEdit" placeholder="e.g. memobox" />
+             <el-form-item :label="t('form.projectId')">
+              <el-input v-model="form.projectId" :disabled="isEdit" :placeholder="t('form.placeholders.projectId')" />
             </el-form-item>
           </el-col>
            <el-col :span="12">
-            <el-form-item label="Project Name">
-              <el-input v-model="form.project_name" placeholder="e.g. MemoBox" />
+            <el-form-item :label="t('form.projectName')">
+              <el-input v-model="form.projectName" :placeholder="t('form.placeholders.projectName')" />
             </el-form-item>
           </el-col>
         </el-row>
        
         <el-row :gutter="20">
           <el-col :span="16">
-            <el-form-item label="Database Host">
-              <el-input v-model="form.db_host" placeholder="localhost" />
+            <el-form-item :label="t('form.dbHost')">
+              <el-input v-model="form.dbHost" :placeholder="t('form.placeholders.dbHost')" />
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="Port">
-              <el-input-number v-model="form.db_port" :min="1" :max="65535" style="width: 100%" />
+            <el-form-item :label="t('form.port')">
+              <el-input-number v-model="form.dbPort" :min="1" :max="65535" style="width: 100%" />
             </el-form-item>
           </el-col>
         </el-row>
 
         <el-row :gutter="20">
           <el-col :span="12">
-             <el-form-item label="Database Name">
-              <el-input v-model="form.db_name" placeholder="e.g. memobox" />
+             <el-form-item :label="t('form.dbName')">
+              <el-input v-model="form.dbName" :placeholder="t('form.placeholders.dbName')" />
             </el-form-item>
           </el-col>
            <el-col :span="12">
-            <el-form-item label="Table Prefix">
-              <el-input v-model="form.table_prefix" placeholder="analytics_" />
+            <el-form-item :label="t('form.tablePrefix')">
+              <el-input v-model="form.tablePrefix" :placeholder="t('form.placeholders.tablePrefix')" />
             </el-form-item>
           </el-col>
         </el-row>
 
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="Username">
-              <el-input v-model="form.db_user" placeholder="root" />
+            <el-form-item :label="t('form.username')">
+              <el-input v-model="form.dbUser" :placeholder="t('form.placeholders.username')" />
             </el-form-item>
           </el-col>
            <el-col :span="12">
-            <el-form-item label="Password">
-              <el-input v-model="form.db_password" type="password" show-password
-                :placeholder="isEdit ? 'Leave empty to keep unchanged' : 'Password'" />
+            <el-form-item :label="t('form.password')">
+              <el-input v-model="form.dbPassword" type="password" show-password
+                :placeholder="isEdit ? t('form.placeholders.passwordEdit') : t('form.placeholders.password')" />
             </el-form-item>
           </el-col>
         </el-row>
 
-        <el-form-item label="Status">
-          <el-switch v-model="form.is_active" active-text="Active" inactive-text="Inactive" />
+        <el-form-item :label="t('form.status')">
+          <el-switch
+            v-model="form.isActive"
+            :active-text="t('status.active')"
+            :inactive-text="t('status.inactive')"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">Cancel</el-button>
-          <el-button type="primary" @click="saveProject">Save</el-button>
+          <el-button @click="dialogVisible = false">{{ t('buttons.cancel') }}</el-button>
+          <el-button type="primary" @click="saveProject">{{ t('buttons.save') }}</el-button>
         </span>
       </template>
     </el-dialog>
@@ -143,8 +182,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import LanguageToggle from '@/components/LanguageToggle.vue'
+import { useI18n } from '@/i18n'
 import { 
   getProjects, 
   createProject, 
@@ -160,6 +202,20 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 
+const router = useRouter()
+const route = useRoute()
+
+const isProjectsRoute = computed(() => route.path === '/')
+const isMetricsRoute = computed(() => route.path === '/metrics')
+
+const goProjects = () => router.push('/')
+const goMetrics = () => router.push('/metrics')
+const { t } = useI18n()
+
+const openProjectMetrics = (project: Project) => {
+  router.push({ path: '/metrics', query: { projectId: project.projectId } })
+}
+
 type ErrorPayload = {
   error?: { message?: string }
   message?: string
@@ -167,19 +223,19 @@ type ErrorPayload = {
 
 const getErrorMessage = (err: unknown, fallback: string) => {
   const e = err as { response?: { data?: ErrorPayload } }
-  return e.response?.data?.error?.message || e.response?.data?.message || fallback
+  return e.response?.data?.error?.message || fallback
 }
 
 const getEmptyForm = (): Partial<Project> => ({
-  project_id: '',
-  project_name: '',
-  db_host: 'localhost',
-  db_port: 5432,
-  db_name: '',
-  db_user: 'postgres',
-  db_password: '',
-  table_prefix: 'analytics_',
-  is_active: true,
+  projectId: '',
+  projectName: '',
+  dbHost: 'localhost',
+  dbPort: 5432,
+  dbName: '',
+  dbUser: 'postgres',
+  dbPassword: '',
+  tablePrefix: 'analytics_',
+  isActive: true,
 })
 
 const form = ref(getEmptyForm())
@@ -192,7 +248,7 @@ const loadProjects = async () => {
     // Trigger health checks after list load to avoid blocking initial render.
     projects.value.forEach(p => handleCheckHealth(p))
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, 'Failed to load projects'))
+    ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   } finally {
     loading.value = false
   }
@@ -207,7 +263,7 @@ const handleCheckHealth = async (project: Project) => {
     // Fallback state keeps UI consistent when the health endpoint fails.
     project.health = { 
       connected: false, 
-      tables: { devices: false, events: false, sessions: false, traffic_metrics: false }, 
+      tables: { devices: false, events: false, sessions: false, trafficMetrics: false }, 
       allTablesExist: false 
     }
   } finally {
@@ -224,7 +280,7 @@ const showAddDialog = () => {
 const handleEditProject = (project: Project) => {
   isEdit.value = true
   // Leave password empty so the backend can keep it unchanged.
-  form.value = { ...project, db_password: '' }
+  form.value = { ...project, dbPassword: '' }
   dialogVisible.value = true
 }
 
@@ -233,33 +289,33 @@ const saveProject = async () => {
     if (isEdit.value) {
       if (form.value.id) {
         await updateProject(form.value.id, form.value)
-        ElMessage.success('Project updated successfully')
+        ElMessage.success(t('messages.projectUpdated'))
       }
     } else {
       await createProject(form.value)
-      ElMessage.success('Project created successfully')
+      ElMessage.success(t('messages.projectCreated'))
     }
     dialogVisible.value = false
     loadProjects()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, 'Failed to save project'))
+    ElMessage.error(getErrorMessage(error, t('messages.saveProjectFailed')))
   }
 }
 
 const handleInitDatabase = async (project: Project) => {
   try {
     await ElMessageBox.confirm(
-      `Initialize database for ${project.project_name}? This will create analytics tables.`,
-      'Confirm Initialization',
-      { confirmButtonText: 'Initialize', cancelButtonText: 'Cancel', type: 'warning' }
+      t('dialogs.confirmInitMessage', { name: project.projectName }),
+      t('dialogs.confirmInitTitle'),
+      { confirmButtonText: t('dialogs.confirmInitOk'), cancelButtonText: t('buttons.cancel'), type: 'warning' }
     )
     
     const res = await initProjectDatabase(project.id)
-    ElMessage.success(res.data.message || 'Initialization successful')
+    ElMessage.success(res.data.message || t('messages.initSuccess'))
     handleCheckHealth(project)
   } catch (error) {
       if (error !== 'cancel') {
-         ElMessage.error(getErrorMessage(error, 'Initialization failed'))
+         ElMessage.error(getErrorMessage(error, t('messages.initFailed')))
       }
   }
 }
@@ -267,17 +323,17 @@ const handleInitDatabase = async (project: Project) => {
 const handleDeleteProject = async (project: Project) => {
   try {
     await ElMessageBox.confirm(
-      `Are you sure you want to delete ${project.project_name}? Configuration will be removed but data remains.`,
-      'Confirm Deletion',
-      { confirmButtonText: 'Delete', cancelButtonText: 'Cancel', type: 'warning' }
+      t('dialogs.confirmDeleteMessage', { name: project.projectName }),
+      t('dialogs.confirmDeleteTitle'),
+      { confirmButtonText: t('dialogs.confirmDeleteOk'), cancelButtonText: t('buttons.cancel'), type: 'warning' }
     )
     
     await deleteProject(project.id)
-    ElMessage.success('Project deleted successfully')
+    ElMessage.success(t('messages.projectDeleted'))
     loadProjects()
   } catch (error) {
     if (error !== 'cancel') {
-        ElMessage.error(getErrorMessage(error, 'Deletion failed'))
+        ElMessage.error(getErrorMessage(error, t('messages.deletionFailed')))
     }
   }
 }
@@ -306,6 +362,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   border: 1px solid rgba(0, 0, 0, 0.04);
+  gap: 24px;
 }
 
 .header-title {
@@ -313,6 +370,19 @@ onMounted(() => {
   font-weight: 700;
   color: #1d1d1f;
   letter-spacing: -0.02em;
+}
+
+.header-subtitle {
+  color: #86868b;
+  font-size: 14px;
+  margin: 6px 0 0;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .content-card {
@@ -347,6 +417,10 @@ onMounted(() => {
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
+.project-card.clickable {
+  cursor: pointer;
+}
+
 .project-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
@@ -358,6 +432,32 @@ onMounted(() => {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 20px;
+}
+
+.card-footer {
+  margin-top: 16px;
+  font-size: 12px;
+  color: #86868b;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  letter-spacing: 0.02em;
+}
+
+.card-footer-icon {
+  margin-left: 6px;
+  font-size: 12px;
+}
+
+.project-card:hover .card-footer {
+  color: #0071e3;
+}
+
+@media (max-width: 960px) {
+  .header-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .project-info h3 {

@@ -17,48 +17,79 @@ export interface ProjectHealth {
     devices: boolean
     events: boolean
     sessions: boolean
-    traffic_metrics: boolean
+    trafficMetrics: boolean
   }
   allTablesExist: boolean
 }
 
 export interface Project {
   id: string
-  project_id: string
-  project_name: string
-  db_host: string
-  db_port: number
-  db_name: string
-  db_user: string
-  db_password?: string
-  table_prefix: string
-  is_active: boolean
-  
+  projectId: string
+  projectName: string
+  dbHost: string
+  dbPort: number
+  dbName: string
+  dbUser: string
+  dbPassword?: string
+  tablePrefix: string
+  isActive: boolean
+
   health?: ProjectHealth | null
   healthLoading?: boolean
 }
 
+type ProjectPayload = {
+  projectId?: string
+  projectName?: string
+  dbHost?: string
+  dbPort?: number
+  dbName?: string
+  dbUser?: string
+  dbPassword?: string
+  tablePrefix?: string
+  isActive?: boolean
+}
+
+const buildProjectPayload = (data: Partial<Project>): ProjectPayload => {
+  const payload: ProjectPayload = {
+    projectId: data.projectId,
+    projectName: data.projectName,
+    dbHost: data.dbHost,
+    dbPort: data.dbPort,
+    dbName: data.dbName,
+    dbUser: data.dbUser,
+    tablePrefix: data.tablePrefix,
+    isActive: data.isActive,
+  }
+
+  if (data.dbPassword) {
+    payload.dbPassword = data.dbPassword
+  }
+
+  return payload
+}
+
 // Admin endpoints are protected by X-Admin-Token (added in the request interceptor).
 export const getProjects = () => {
-  return request.get<ApiResponse<Project[]>>('/api/admin/projects')
+  return request.get<ApiResponse<Project[]>>('/admin/projects')
 }
 
 export const createProject = (data: Partial<Project>) => {
-  return request.post<ApiResponse<Project>>('/api/admin/projects', data)
+  return request.post<ApiResponse<Project>>('/admin/projects', buildProjectPayload(data))
 }
 
 export const updateProject = (id: string, data: Partial<Project>) => {
-  return request.put<ApiResponse<Project>>(`/api/admin/projects/${id}`, data)
+  return request.put<ApiResponse<Project>>(`/admin/projects/${id}`, buildProjectPayload(data))
 }
 
 export const deleteProject = (id: string) => {
-  return request.delete<ApiResponse<null>>(`/api/admin/projects/${id}`)
+  return request.delete<ApiResponse<null>>(`/admin/projects/${id}`)
 }
 
 export const checkProjectHealth = (id: string) => {
-  return request.get<ApiResponse<ProjectHealth>>(`/api/admin/projects/${id}/health`)
+  return request.get<ApiResponse<ProjectHealth>>(`/admin/projects/${id}/health`)
 }
 
 export const initProjectDatabase = (id: string) => {
-  return request.post<ApiResponse<null>>(`/api/admin/projects/${id}/init`)
+  return request.post<ApiResponse<null>>(`/admin/projects/${id}/init`)
 }
