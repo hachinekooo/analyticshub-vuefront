@@ -17,6 +17,7 @@ dist
 dist-ssr
 coverage
 *.tsbuildinfo
+*.zip
 
 # Logs
 logs
