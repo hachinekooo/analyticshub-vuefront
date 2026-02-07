@@ -18,8 +18,17 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // Dev-only proxy: keep browser requests same-origin and forward to backend to avoid CORS.
-      '/api': {
+      /**
+       * 开发环境代理配置 - 解决CORS跨域问题
+       * 
+       * 工作原理：
+       * 1. 前端请求发送到同源地址 (http://localhost:5173/api/...)
+       * 2. Vite开发服务器将 /api/* 路径的请求转发到后端服务 (http://localhost:3001)
+       * 3. 浏览器认为所有请求都是同源的，避免了CORS限制
+       * 
+       * 注意：生产环境通过Nginx反向代理实现相同功能，见 docs/DEPLOYMENT.md
+       */
+      '/api/': {
         target: 'http://localhost:3001',
         changeOrigin: true
       }
