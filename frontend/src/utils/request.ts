@@ -46,6 +46,22 @@ service.interceptors.request.use(
   }
 )
 
+// Queue to hold pending requests while 2FA is in progress
+let isVerifying2FA = false
+let requestQueue: { resolve: (value: any) => void; reject: (reason?: any) => void; config: any }[] = []
+
+const processQueue = () => {
+  requestQueue.forEach(({ resolve, config }) => {
+    resolve(service(config))
+  })
+  requestQueue = []
+}
+
+const rejectQueue = (error: any) => {
+  requestQueue.forEach(({ reject }) => reject(error))
+  requestQueue = []
+}
+
 service.interceptors.response.use(
   (response: AxiosResponse) => {
     return response
@@ -54,12 +70,43 @@ service.interceptors.response.use(
     const axiosError = error as AxiosError<ErrorPayload>
     const status = axiosError.response?.status
     const data = axiosError.response?.data
+    const config = axiosError.config
+
+    // Debug log to verify backend response format
+    if (import.meta.env.DEV) {
+      console.log('Axios Error Interceptor:', { status, data, url: config?.url })
+    }
 
     // Handle 2FA requirement
-    if (status === 403 && data?.code === 'REQUIRE_2FA') {
+    // Expanded check to be more robust against backend response variations
+    const is2FACode = (code?: string) => code === 'REQUIRE_2FA'
+    const is2FAMessage = (msg?: string) => {
+      if (!msg) return false
+      const lower = msg.toLowerCase()
+      return lower.includes('2fa') || lower.includes('otp') || lower.includes('验证码') || lower.includes('双因素')
+    }
+
+    const is2FARequired = status === 403 && (
+      is2FACode(data?.code) ||
+      is2FACode((data?.error as any)?.code) ||
+      is2FAMessage(data?.message) ||
+      is2FAMessage(data?.error?.message)
+    )
+
+    if (is2FARequired && config) {
+
+      // If 2FA validation is already in progress, queue this request
+      if (isVerifying2FA) {
+        return new Promise((resolve, reject) => {
+          requestQueue.push({ resolve, reject, config })
+        })
+      }
+
+      isVerifying2FA = true
+
       try {
         const { value: otpCode } = await ElMessageBox.prompt(
-          data.message || '检测到异常/新环境登录，需要双因素认证。',
+          data?.message || '检测到异常/新环境登录，需要双因素认证。',
           '安全验证',
           {
             confirmButtonText: '验证',
@@ -67,14 +114,26 @@ service.interceptors.response.use(
             inputPattern: /^\d{6}$/,
             inputErrorMessage: '格式不正确，请输入6位数字',
             inputPlaceholder: '请输入 Authenticator App 上的 6 位数字',
+            closeOnClickModal: false,
+            closeOnPressEscape: false
           }
         )
 
-        if (axiosError.config) {
-          axiosError.config.headers['X-Admin-OTP'] = otpCode
-          return service(axiosError.config)
-        }
+        // Retry the current request with the OTP
+        config.headers['X-Admin-OTP'] = otpCode
+        const result = await service(config)
+
+        // If successful, process the queue (retry other pending requests)
+        // Note: Other requests don't need OTP anymore if the IP is whitelisted by the first success
+        processQueue()
+
+        isVerifying2FA = false
+        return result
+
       } catch (e) {
+        isVerifying2FA = false
+        rejectQueue(e) // Clear queue
+
         if (e !== 'cancel') {
           ElMessage.error('验证失败或输入取消')
         }
@@ -86,11 +145,10 @@ service.interceptors.response.use(
       data?.error?.message || data?.message || t('errors.networkFailed')
 
     if (status === 401) {
-      // Token invalid/expired: clear and force re-login so the admin flow is consistent.
+      // Token invalid/expired: clear and force re-login
       localStorage.removeItem('admin_token')
       ElMessage.error(t('auth.sessionExpired'))
 
-      // Avoid redirect loop if already on login page
       if (router.currentRoute.value.path !== '/login') {
         const query = { redirect: router.currentRoute.value.fullPath }
         router.push({ path: '/login', query })
