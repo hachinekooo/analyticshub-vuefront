@@ -1,332 +1,359 @@
 <template>
   <div class="admin-container">
     <div class="header-card">
-      <div>
-        <h1 class="header-title">{{ t('metrics.title') }}</h1>
-        <p class="header-subtitle">{{ t('metrics.subtitle') }}</p>
-      </div>
-      <div class="header-actions">
-        <el-button-group class="nav-group">
-          <el-button :type="isProjectsRoute ? 'primary' : 'default'" @click="goProjects">
-            <el-icon class="el-icon--left"><FolderOpened /></el-icon>
-            {{ t('nav.projects') }}
-          </el-button>
-          <el-button :type="isMetricsRoute ? 'primary' : 'default'" @click="goMetrics">
-            <el-icon class="el-icon--left"><TrendCharts /></el-icon>
-            {{ t('nav.metrics') }}
-          </el-button>
-        </el-button-group>
-        <LanguageToggle />
-        <el-button type="primary" :loading="refreshing" @click="refreshAll">
-          <el-icon class="el-icon--left"><Refresh /></el-icon>
-          {{ t('buttons.refresh') }}
-        </el-button>
-      </div>
-    </div>
-
-    <div class="content-card">
-      <el-form :model="filters" label-position="top" class="filter-form">
-        <el-row :gutter="16">
-          <el-col :span="6">
-            <el-form-item :label="t('filters.project')">
-              <el-select v-model="filters.projectId" :placeholder="t('filters.selectProject')" filterable clearable>
-                <el-option
-                  v-for="project in projects"
-                  :key="project.id"
-                  :label="`${project.projectName} (${project.projectId})`"
-                  :value="project.projectId"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="10">
-            <el-form-item :label="t('filters.dateRange')">
-              <el-date-picker
-                v-model="filters.dateRange"
-                type="daterange"
-                :range-separator="t('filters.rangeSeparator')"
-                :start-placeholder="t('filters.startDate')"
-                :end-placeholder="t('filters.endDate')"
-                format="YYYY-MM-DD"
-                value-format="YYYY-MM-DD"
-                unlink-panels
-                style="width: 100%"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item :label="t('filters.granularity')" v-if="activeTab === 'trends'">
-              <el-select v-model="filters.granularity">
-                <el-option :label="t('filters.daily')" value="day" />
-                <el-option :label="t('filters.hourly')" value="hour" />
-              </el-select>
-            </el-form-item>
-            <el-form-item :label="t('filters.topLimit')" v-else-if="activeTab === 'topEvents'">
-              <el-input-number v-model="filters.topEventsLimit" :min="1" :max="50" style="width: 100%" />
-            </el-form-item>
-            <el-form-item :label="t('filters.eventType')" v-else-if="activeTab === 'events'">
-              <el-input v-model="filters.eventType" :placeholder="t('filters.placeholders.eventType')" clearable />
-            </el-form-item>
-            <el-form-item :label="t('filters.deviceId')" v-else-if="activeTab === 'devices'">
-              <el-input v-model="filters.deviceId" :placeholder="t('filters.placeholders.deviceId')" clearable />
-            </el-form-item>
-            <el-form-item :label="t('filters.sessionId')" v-else-if="activeTab === 'sessions'">
-              <el-input v-model="filters.sessionId" :placeholder="t('filters.placeholders.sessionId')" clearable />
-            </el-form-item>
-            <el-form-item :label="t('filters.metricType')" v-else-if="activeTab === 'traffic'">
-              <el-input v-model="filters.metricType" :placeholder="t('filters.placeholders.metricType')" clearable />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="16" v-if="activeTab === 'events' || activeTab === 'devices' || activeTab === 'sessions' || activeTab === 'traffic'">
-          <el-col :span="6" v-if="activeTab !== 'devices'">
-            <el-form-item :label="t('filters.userId')">
-              <el-input v-model="filters.userId" :placeholder="t('filters.placeholders.userId')" clearable />
-            </el-form-item>
-          </el-col>
-          <el-col :span="6" v-if="activeTab === 'events' || activeTab === 'sessions' || activeTab === 'traffic'">
-            <el-form-item :label="t('filters.deviceId')">
-              <el-input v-model="filters.deviceId" :placeholder="t('filters.placeholders.deviceId')" clearable />
-            </el-form-item>
-          </el-col>
-          <el-col :span="6" v-if="activeTab === 'traffic'">
-            <el-form-item :label="t('filters.sessionId')">
-              <el-input v-model="filters.sessionId" :placeholder="t('filters.placeholders.sessionId')" clearable />
-            </el-form-item>
-          </el-col>
-          <el-col :span="6" v-if="activeTab === 'devices'">
-            <el-form-item :label="t('filters.apiKey')">
-              <el-input v-model="filters.apiKey" :placeholder="t('filters.placeholders.apiKey')" clearable />
-            </el-form-item>
-          </el-col>
-          <el-col :span="6" v-if="activeTab === 'devices'">
-            <el-form-item :label="t('filters.banStatus')">
-              <el-select v-model="filters.isBanned" clearable>
-                <el-option :label="t('status.banned')" value="true" />
-                <el-option :label="t('status.normal')" value="false" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-    </div>
-
-    <el-tabs v-model="activeTab" class="metrics-tabs">
-      <el-tab-pane :label="t('metrics.overview')" name="overview">
-        <div class="content-card" v-loading="overviewLoading">
-          <div v-if="overview" class="overview-grid">
-            <div class="overview-item">
-              <p>{{ t('metrics.overviewItems.devicesTotal') }}</p>
-              <h3>{{ formatNumber(overview.devicesTotal) }}</h3>
-            </div>
-            <div class="overview-item">
-              <p>{{ t('metrics.overviewItems.devicesActive') }}</p>
-              <h3>{{ formatNumber(overview.devicesActive) }}</h3>
-            </div>
-            <div class="overview-item">
-              <p>{{ t('metrics.overviewItems.usersActive') }}</p>
-              <h3>{{ formatNumber(overview.usersActive) }}</h3>
-            </div>
-            <div class="overview-item">
-              <p>{{ t('metrics.overviewItems.sessionsTotal') }}</p>
-              <h3>{{ formatNumber(overview.sessionsTotal) }}</h3>
-            </div>
-            <div class="overview-item">
-              <p>{{ t('metrics.overviewItems.eventsTotal') }}</p>
-              <h3>{{ formatNumber(overview.eventsTotal) }}</h3>
-            </div>
-            <div class="overview-item">
-              <p>{{ t('metrics.overviewItems.avgSessionDuration') }}</p>
-              <h3>{{ formatDuration(overview.avgSessionDurationMs) }}</h3>
-            </div>
-            <div class="overview-item">
-              <p>{{ t('metrics.overviewItems.avgEventsPerSession') }}</p>
-              <h3>{{ overview.avgEventsPerSession.toFixed(2) }}</h3>
-            </div>
+      <div class="header-main">
+        <div class="header-main-left">
+          <div>
+            <h1 class="header-title">{{ t('metrics.title') }}</h1>
+            <p class="header-subtitle">{{ t('metrics.subtitle') }}</p>
           </div>
-          <div v-else class="empty-state">{{ t('metrics.overviewEmpty') }}</div>
+          
         </div>
-      </el-tab-pane>
-
-      <el-tab-pane :label="t('metrics.trends')" name="trends">
-        <div class="content-card" v-loading="trendsLoading">
-          <div v-if="trends && trends.points.length" class="trend-chart">
-            <div class="chart-legend">
-              <span class="legend-dot events"></span> {{ t('metrics.chart.events') }}
-              <span class="legend-dot sessions"></span> {{ t('metrics.chart.sessions') }}
+        <div class="header-actions">
+          <div class="custom-segmented-control">
+            <div 
+              class="segment-item" 
+              :class="{ 'is-active': activeSpace === 'operations' }"
+              @click="activeSpace = 'operations'"
+            >
+              {{ t('metrics.spaces.operations') }}
             </div>
-            <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="trend-svg">
-              <path :d="trendPath('events')" class="trend-line events" />
-              <path :d="trendPath('sessions')" class="trend-line sessions" />
-            </svg>
-            <div class="chart-meta">
-              <span>
-                {{ t('metrics.chart.range') }}: {{ formatDate(trends.rangeStart) }} - {{ formatDate(trends.rangeEnd) }}
-              </span>
-              <span>
-                {{ t('metrics.chart.granularity') }}:
-                {{ trends.granularity === 'day' ? t('filters.daily') : t('filters.hourly') }}
-              </span>
+            <div 
+              class="segment-item" 
+              :class="{ 'is-active': activeSpace === 'technical' }"
+              @click="activeSpace = 'technical'"
+            >
+              {{ t('metrics.spaces.technical') }}
             </div>
           </div>
-          <div v-else class="empty-state">{{ t('metrics.noTrendData') }}</div>
+          <div class="divider-vertical"></div>
+          <LanguageToggle />
+          
+          <el-tooltip :content="t('metrics.resetLayout')" placement="top">
+            <el-button @click="resetToDefaultLayout" circle plain>
+              <el-icon><Brush /></el-icon>
+            </el-button>
+          </el-tooltip>
 
-          <el-table
-            v-if="trends && trends.points.length"
-            :data="trends.points"
-            style="width: 100%"
-            class="table-space"
+          <el-tooltip :content="t('buttons.refresh')" placement="top">
+            <el-button type="primary" :loading="refreshing" @click="refreshAll" circle plain>
+              <el-icon><Refresh /></el-icon>
+            </el-button>
+          </el-tooltip>
+
+          <el-tooltip :content="t('buttons.edit')" placement="top">
+            <el-button @click="isLayoutEditable = !isLayoutEditable" :type="isLayoutEditable ? 'warning' : 'default'" circle plain>
+              <el-icon><Setting /></el-icon>
+            </el-button>
+          </el-tooltip>
+        </div>
+      </div>
+      
+      <div class="filter-bar-compact">
+        <el-form :model="filters" inline class="compact-form">
+          <el-select v-model="filters.projectId" :placeholder="t('filters.selectProject')" filterable style="width: 160px">
+            <el-option
+              v-for="project in projects"
+              :key="project.id"
+              :label="project.projectName"
+              :value="project.projectId"
+            />
+          </el-select>
+          <el-date-picker
+            v-model="filters.dateRange"
+            type="daterange"
+            unlink-panels
+            format="YYYY-MM-DD"
+            value-format="YYYY-MM-DD"
+            style="width: 240px"
+          />
+          <el-select v-model="filters.granularity" style="width: 100px" v-if="activeSpace === 'operations'">
+            <el-option :label="t('filters.daily')" value="day" />
+            <el-option :label="t('filters.hourly')" value="hour" />
+          </el-select>
+          
+          <template v-if="activeSpace === 'technical'">
+             <el-input v-model="filters.userId" :placeholder="t('filters.userId')" clearable style="width: 120px" />
+             <el-input v-model="filters.deviceId" :placeholder="t('filters.deviceId')" clearable style="width: 120px" />
+             <el-select v-model="filters.platform" style="width: 100px">
+                <el-option :label="t('filters.platformWeb')" value="web" />
+                <el-option :label="t('filters.platformApp')" value="app" />
+             </el-select>
+          </template>
+        </el-form>
+      </div>
+    </div>
+
+      <div class="workspace-area">
+        <grid-layout
+          v-if="layoutVisible && dashboardLayout.length > 0"
+          :key="activeSpace"
+          v-model:layout="dashboardLayout"
+          :col-num="12"
+          :row-height="30"
+          :is-draggable="isLayoutEditable"
+          :is-resizable="isLayoutEditable"
+          :vertical-compact="true"
+          :use-css-transforms="true"
+          class="dashboard-grid"
+        >
+          <grid-item v-for="item in dashboardLayout"
+            :key="item.i"
+            :x="item.x"
+            :y="item.y"
+            :w="item.w"
+            :h="item.h"
+            :i="item.i"
+            :min-w="item.minW || 2"
+            :min-h="item.minH || 2"
+            :is-draggable="isLayoutEditable"
+            :is-resizable="isLayoutEditable"
+
+            class="grid-item-card" :class="{ 'is-editing': isLayoutEditable }"
           >
-            <el-table-column prop="time" :label="t('tables.time')" min-width="160">
-              <template #default="{ row }">{{ formatDateTime(row.time) }}</template>
-            </el-table-column>
-            <el-table-column prop="events" :label="t('tables.events')" min-width="120" />
-            <el-table-column prop="sessions" :label="t('tables.sessions')" min-width="120" />
-          </el-table>
-        </div>
-      </el-tab-pane>
+            <div class="widget-container">
+              <!-- Widget Header with Actions -->
+              <div class="widget-header-bar" v-if="isLayoutEditable">
+                 <span class="widget-drag-handle"><el-icon><Rank /></el-icon></span>
+                 <span class="widget-label">{{ getWidgetLabel(item.i) }}</span>
+                 <el-button size="small" link type="danger" @click="removeWidget(item.i)">
+                   <el-icon><Close /></el-icon>
+                 </el-button>
+              </div>
 
-      <el-tab-pane :label="t('metrics.topEvents')" name="topEvents">
-        <div class="content-card" v-loading="topEventsLoading">
-          <el-table :data="topEvents?.items || []" style="width: 100%">
-            <el-table-column prop="eventType" :label="t('tables.eventType')" min-width="180" />
-            <el-table-column prop="count" :label="t('tables.count')" min-width="120" />
-          </el-table>
-        </div>
-      </el-tab-pane>
+              <!-- Widget Content Overlay -->
+              <div class="widget-inner">
+                <!-- Overview Widget -->
+                <div v-if="item.i.startsWith('overview')" class="widget-content" v-loading="overviewLoading">
+                  <div v-if="overview" class="overview-grid-compact">
+                    <div v-for="(val, label) in overviewItems" :key="label" class="overview-mini-card">
+                       <p class="mini-label">{{ label }}</p>
+                       <p class="mini-value">{{ val }}</p>
+                    </div>
+                  </div>
+                  <el-empty v-else description="No Data" :image-size="60" />
+                </div>
 
-      <el-tab-pane :label="t('metrics.events')" name="events">
-        <div class="content-card" v-loading="eventsLoading">
-          <el-table :data="events.items" style="width: 100%">
-            <el-table-column prop="eventType" :label="t('tables.eventType')" min-width="160" />
-            <el-table-column prop="eventTimestamp" :label="t('tables.eventTime')" min-width="180">
-              <template #default="{ row }">{{ formatTimestamp(row.eventTimestamp) }}</template>
-            </el-table-column>
-            <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="userId" :label="t('tables.userId')" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="sessionId" :label="t('tables.sessionId')" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="properties" :label="t('tables.properties')" min-width="220">
-              <template #default="{ row }">
-                <span class="mono">{{ formatJson(row.properties) }}</span>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div class="table-footer">
-            <el-pagination
-              background
-              layout="prev, pager, next, sizes, total"
-              :total="events.total"
-              :page-size="events.pageSize"
-              :current-page="events.page"
-              :page-sizes="[20, 50, 100, 200]"
-              @current-change="handleEventsPageChange"
-              @size-change="handleEventsSizeChange"
-            />
-          </div>
-        </div>
-      </el-tab-pane>
+                <!-- Trends Widget -->
+                <div v-else-if="item.i.startsWith('trends')" class="widget-content" v-loading="trendsLoading">
+                   <div class="widget-header">
+                      <span>{{ t('metrics.trends') }}</span>
+                   </div>
+                   <div v-if="trends && trends.points.length" class="trend-chart-full">
+                      <div class="chart-legend">
+                        <span class="legend-dot events"></span> {{ t('metrics.chart.events') }}
+                        <span class="legend-dot sessions"></span> {{ t('metrics.chart.sessions') }}
+                      </div>
+                      <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="trend-svg">
+                        <path :d="trendPath('events')" class="trend-line events" />
+                        <path :d="trendPath('sessions')" class="trend-line sessions" />
+                      </svg>
+                   </div>
+                </div>
 
-      <el-tab-pane :label="t('metrics.devices')" name="devices">
-        <div class="content-card" v-loading="devicesLoading">
-          <el-table :data="devices.items" style="width: 100%">
-            <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="deviceModel" :label="t('tables.model')" min-width="140" />
-            <el-table-column prop="osVersion" :label="t('tables.osVersion')" min-width="120" />
-            <el-table-column prop="appVersion" :label="t('tables.appVersion')" min-width="120" />
-            <el-table-column prop="isBanned" :label="t('tables.status')" min-width="100">
-              <template #default="{ row }">
-                <el-tag :type="row.isBanned ? 'danger' : 'success'">
-                  {{ row.isBanned ? t('status.banned') : t('status.normal') }}
-                </el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column prop="lastActiveAt" :label="t('tables.lastActive')" min-width="180">
-              <template #default="{ row }">{{ formatDateTime(row.lastActiveAt) }}</template>
-            </el-table-column>
-          </el-table>
-          <div class="table-footer">
-            <el-pagination
-              background
-              layout="prev, pager, next, sizes, total"
-              :total="devices.total"
-              :page-size="devices.pageSize"
-              :current-page="devices.page"
-              :page-sizes="[20, 50, 100, 200]"
-              @current-change="handleDevicesPageChange"
-              @size-change="handleDevicesSizeChange"
-            />
-          </div>
-        </div>
-      </el-tab-pane>
+                <!-- Top Events Widget -->
+                <div v-else-if="item.i.startsWith('topEvents')" class="widget-content" v-loading="topEventsLoading">
+                   <div class="widget-header">
+                      <span>{{ t('metrics.topEvents') }}</span>
+                   </div>
+                   <el-table :data="topEvents?.items || []" size="small" style="width: 100%">
+                      <el-table-column prop="eventType" :label="t('tables.eventType')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="count" :label="t('tables.count')" min-width="120" />
+                   </el-table>
+                </div>
 
-      <el-tab-pane :label="t('metrics.sessions')" name="sessions">
-        <div class="content-card" v-loading="sessionsLoading">
-          <el-table :data="sessions.items" style="width: 100%">
-            <el-table-column prop="sessionId" :label="t('tables.sessionId')" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="userId" :label="t('tables.userId')" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="sessionStartTime" :label="t('tables.startTime')" min-width="180">
-              <template #default="{ row }">{{ formatDateTime(row.sessionStartTime) }}</template>
-            </el-table-column>
-            <el-table-column prop="sessionDurationMs" :label="t('tables.duration')" min-width="120">
-              <template #default="{ row }">{{ formatDuration(row.sessionDurationMs) }}</template>
-            </el-table-column>
-            <el-table-column prop="eventCount" :label="t('tables.events')" min-width="100" />
-          </el-table>
-          <div class="table-footer">
-            <el-pagination
-              background
-              layout="prev, pager, next, sizes, total"
-              :total="sessions.total"
-              :page-size="sessions.pageSize"
-              :current-page="sessions.page"
-              :page-sizes="[20, 50, 100, 200]"
-              @current-change="handleSessionsPageChange"
-              @size-change="handleSessionsSizeChange"
-            />
-          </div>
-        </div>
-      </el-tab-pane>
+                <!-- Traffic Trends Widget -->
+                <div v-else-if="item.i.startsWith('trafficTrends')" class="widget-content" v-loading="trafficTrendsLoading">
+                   <div class="widget-header">
+                      <span>{{ t('metrics.chart.pageViews') }} / {{ t('metrics.chart.visitors') }}</span>
+                   </div>
+                   <div v-if="trafficTrends && trafficTrends.points.length" class="trend-chart-full">
+                      <div class="chart-legend">
+                        <span class="legend-dot events"></span> {{ t('metrics.chart.pageViews') }}
+                        <span class="legend-dot sessions"></span> {{ t('metrics.chart.visitors') }}
+                      </div>
+                      <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="trend-svg">
+                        <path :d="trendPath('pageViews')" class="trend-line events" />
+                        <path :d="trendPath('visitors')" class="trend-line sessions" />
+                      </svg>
+                   </div>
+                </div>
+                
+                <!-- Rankings Widget -->
+                 <div v-else-if="item.i.startsWith('rankings')" class="widget-content">
+                   <div class="widget-header">
+                      <span>{{ t('metrics.topPages') }}</span>
+                   </div>
+                   <el-table :data="topPages" size="small" style="width: 100%">
+                      <el-table-column prop="pagePath" :label="t('tables.page')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="count" :label="t('tables.count')" min-width="120" />
+                   </el-table>
+                </div>
 
-      <el-tab-pane :label="t('metrics.traffic')" name="traffic">
-        <div class="content-card" v-loading="trafficLoading">
-          <el-table :data="traffic.items" style="width: 100%">
-            <el-table-column prop="metricType" :label="t('tables.metricType')" min-width="160" />
-            <el-table-column prop="pagePath" :label="t('tables.page')" min-width="160" show-overflow-tooltip />
-            <el-table-column prop="referrer" :label="t('tables.referrer')" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="metricTimestamp" :label="t('tables.eventTime')" min-width="180">
-              <template #default="{ row }">{{ formatTimestamp(row.metricTimestamp) }}</template>
-            </el-table-column>
-            <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="220" show-overflow-tooltip />
-            <el-table-column prop="userId" :label="t('tables.userId')" min-width="120" show-overflow-tooltip />
-            <el-table-column prop="sessionId" :label="t('tables.sessionId')" min-width="220" show-overflow-tooltip />
-          </el-table>
-          <div class="table-footer">
-            <el-pagination
-              background
-              layout="prev, pager, next, sizes, total"
-              :total="traffic.total"
-              :page-size="traffic.pageSize"
-              :current-page="traffic.page"
-              :page-sizes="[20, 50, 100, 200]"
-              @current-change="handleTrafficPageChange"
-              @size-change="handleTrafficSizeChange"
-            />
-          </div>
-        </div>
-      </el-tab-pane>
-    </el-tabs>
+                <!-- Counters Widget -->
+                <div v-else-if="item.i.startsWith('counters')" class="widget-content" v-loading="countersLoading">
+                   <div class="widget-header">
+                      <span>{{ t('metrics.counters') }}</span>
+                   </div>
+                   <el-table :data="counters" size="small" style="width: 100%">
+                      <el-table-column prop="key" :label="t('tables.key')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="value" :label="t('tables.value')" min-width="120" />
+                      <el-table-column :label="t('buttons.actions')" min-width="120">
+                        <template #default="{ row }">
+                          <el-button-group>
+                            <el-button size="small" type="primary" link icon="Plus" @click="handleIncrementCounter(row)" />
+                            <el-button size="small" type="success" link icon="Edit" @click="showEditCounterDialog(row)" />
+                          </el-button-group>
+                        </template>
+                      </el-table-column>
+                   </el-table>
+                </div>
+
+                <!-- Traffic Table Widget -->
+                <div v-else-if="item.i.startsWith('traffic')" class="widget-content" v-loading="trafficLoading">
+                   <div class="widget-header">
+                      <span>{{ t('metrics.traffic') }}</span>
+                   </div>
+                   <el-table :data="traffic.items" size="small" style="width: 100%">
+                      <el-table-column prop="metricType" :label="t('tables.metricType')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="pagePath" :label="t('tables.page')" min-width="200" show-overflow-tooltip />
+                      <el-table-column prop="metricTimestamp" :label="t('tables.eventTime')" min-width="140">
+                         <template #default="{ row }">{{ formatTimestamp(row.metricTimestamp) }}</template>
+                      </el-table-column>
+                   </el-table>
+                   <div class="widget-footer-mini">
+                      <el-pagination
+                        small
+                        layout="prev, pager, next"
+                        :total="traffic.total"
+                        :page-size="traffic.pageSize"
+                        :current-page="traffic.page"
+                        @current-change="handleTrafficPageChange"
+                      />
+                   </div>
+                </div>
+
+                <!-- Events Table Widget -->
+                <div v-else-if="item.i.startsWith('events')" class="widget-content" v-loading="eventsLoading">
+                   <div class="widget-header">
+                      <span>{{ t('metrics.events') }}</span>
+                   </div>
+                   <el-table :data="events.items" size="small" style="width: 100%">
+                      <el-table-column prop="eventType" :label="t('tables.eventType')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="eventTimestamp" :label="t('tables.eventTime')" min-width="160">
+                         <template #default="{ row }">{{ formatTimestamp(row.eventTimestamp) }}</template>
+                      </el-table-column>
+                      <el-table-column prop="userId" :label="t('tables.userId')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="properties" :label="t('tables.properties')" min-width="200" show-overflow-tooltip>
+                         <template #default="{ row }">{{ formatJson(row.properties) }}</template>
+                      </el-table-column>
+                   </el-table>
+                   <div class="widget-footer-mini">
+                      <el-pagination
+                        small
+                        layout="prev, pager, next"
+                        :total="events.total"
+                        :page-size="events.pageSize"
+                        :current-page="events.page"
+                        @current-change="handleEventsPageChange"
+                      />
+                   </div>
+                </div>
+
+                <!-- Devices Table Widget -->
+                <div v-else-if="item.i.startsWith('devices')" class="widget-content" v-loading="devicesLoading">
+                   <div class="widget-header">
+                      <span>{{ t('metrics.devices') }}</span>
+                   </div>
+                   <el-table :data="devices.items" size="small" style="width: 100%">
+                      <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="deviceModel" :label="t('tables.model')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="osVersion" :label="t('tables.osVersion')" min-width="120" />
+                      <el-table-column prop="isBanned" :label="t('tables.status')" min-width="120">
+                        <template #default="{ row }">
+                          <el-tag size="small" :type="row.isBanned ? 'danger' : 'success'">
+                            {{ row.isBanned ? t('status.banned') : t('status.normal') }}
+                          </el-tag>
+                        </template>
+                      </el-table-column>
+                   </el-table>
+                   <div class="widget-footer-mini">
+                      <el-pagination
+                        small
+                        layout="prev, pager, next"
+                        :total="devices.total"
+                        :page-size="devices.pageSize"
+                        :current-page="devices.page"
+                        @current-change="handleDevicesPageChange"
+                      />
+                   </div>
+                </div>
+
+                <!-- Sessions Table Widget -->
+                <div v-else-if="item.i.startsWith('sessions')" class="widget-content" v-loading="sessionsLoading">
+                   <div class="widget-header">
+                      <span>{{ t('metrics.sessions') }}</span>
+                   </div>
+                   <el-table :data="sessions.items" size="small" style="width: 100%">
+                      <el-table-column prop="sessionId" :label="t('tables.sessionId')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="sessionDurationMs" :label="t('tables.duration')" min-width="120">
+                         <template #default="{ row }">{{ formatDuration(row.sessionDurationMs) }}</template>
+                      </el-table-column>
+                      <el-table-column prop="eventCount" :label="t('tables.events')" min-width="120" />
+                   </el-table>
+                   <div class="widget-footer-mini">
+                      <el-pagination
+                        small
+                        layout="prev, pager, next"
+                        :total="sessions.total"
+                        :page-size="sessions.pageSize"
+                        :current-page="sessions.page"
+                        @current-change="handleSessionsPageChange"
+                      />
+                   </div>
+                </div>
+              </div>
+            </div>
+          </grid-item>
+        </grid-layout>
+      </div>
+
+    <!-- Counter Edit Dialog -->
+    <el-dialog v-model="counterDialogVisible" :title="t('metrics.counters')" width="400px">
+      <el-form :model="counterForm" label-position="top">
+        <el-form-item :label="t('tables.key')">
+          <el-input v-model="counterForm.key" disabled />
+        </el-form-item>
+        <el-form-item :label="t('tables.value')">
+          <el-input-number v-model="counterForm.value" style="width: 100%" />
+        </el-form-item>
+        <el-form-item :label="t('tables.isPublic')">
+          <el-switch v-model="counterForm.isPublic" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="counterDialogVisible = false">{{ t('buttons.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSaveCounter">{{ t('buttons.save') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from '@/i18n'
+import { GridLayout, GridItem } from 'vue3-grid-layout-next'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import LanguageToggle from '@/components/LanguageToggle.vue'
-import { useI18n } from '@/i18n'
 import { getProjects, type Project } from '@/api/admin'
+import {
+  Brush,
+  Refresh,
+  Setting,
+  Close,
+  Rank,
+} from '@element-plus/icons-vue'
 import {
   getDevices,
   getEvents,
@@ -335,6 +362,12 @@ import {
   getSessions,
   getTopEvents,
   getTrafficMetrics,
+  getTrafficSummary,
+  getTrafficTrends,
+  getTopPages,
+  getTopReferrers,
+  incrementCounter,
+  setCounter,
   type MetricsOverview,
   type MetricsTopEvents,
   type MetricsTrends,
@@ -343,27 +376,33 @@ import {
   type EventRecord,
   type SessionRecord,
   type TrafficMetricRecord,
+  type TrafficSummary,
+  type CounterItem,
+  type TrafficTrends,
+  type TopPageItem,
+  type TopReferrerItem,
+  getCounters,
 } from '@/api/metrics'
 
+// --- 1. Types & Interfaces ---
 type ErrorPayload = {
   error?: { message?: string }
   message?: string
 }
 
-const getErrorMessage = (err: unknown, fallback: string) => {
-  const e = err as { response?: { data?: ErrorPayload } }
-  return e.response?.data?.error?.message || fallback
+interface DashboardItem {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  i: string;
+  minW?: number;
+  minH?: number;
 }
 
-const router = useRouter()
+// --- 2. State & Basic Setup ---
 const route = useRoute()
 const { t, locale } = useI18n()
-
-const isProjectsRoute = computed(() => route.path === '/')
-const isMetricsRoute = computed(() => route.path === '/metrics')
-
-const goProjects = () => router.push('/')
-const goMetrics = () => router.push('/metrics')
 
 const routeProjectId = computed(() => {
   const value = route.query.projectId
@@ -371,9 +410,12 @@ const routeProjectId = computed(() => {
 })
 
 const projects = ref<Project[]>([])
-const activeTab = ref('overview')
 const refreshing = ref(false)
+const isLayoutEditable = ref(false)
+const activeSpace = ref<'operations' | 'technical'>('operations')
+const dashboardLayout = ref<DashboardItem[]>([])
 
+// Filters & Params
 const filters = reactive({
   projectId: '',
   dateRange: null as string[] | null,
@@ -386,52 +428,31 @@ const filters = reactive({
   apiKey: '',
   isBanned: '',
   metricType: '',
+  platform: 'web' as 'web' | 'app',
 })
 
+// Metrics Data Collections
 const overview = ref<MetricsOverview | null>(null)
 const trends = ref<MetricsTrends | null>(null)
 const topEvents = ref<MetricsTopEvents | null>(null)
+const trafficTrends = ref<TrafficTrends | null>(null)
+const topPages = ref<TopPageItem[]>([])
+const topReferrers = ref<TopReferrerItem[]>([])
+const trafficSummary = ref<TrafficSummary | null>(null)
+const counters = ref<CounterItem[]>([])
 
-const events = reactive<PagedResult<EventRecord>>({
-  projectId: '',
-  rangeStart: '',
-  rangeEnd: '',
-  page: 1,
-  pageSize: 50,
-  total: 0,
-  items: [],
-})
+// Paged Results
+const events = reactive<PagedResult<EventRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
+const devices = reactive<PagedResult<DeviceRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
+const sessions = reactive<PagedResult<SessionRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
+const traffic = reactive<PagedResult<TrafficMetricRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
 
-const devices = reactive<PagedResult<DeviceRecord>>({
-  projectId: '',
-  rangeStart: '',
-  rangeEnd: '',
-  page: 1,
-  pageSize: 50,
-  total: 0,
-  items: [],
-})
+// Dialogs & Form
+const counterDialogVisible = ref(false)
+const counterForm = reactive({ key: '', value: 0, isPublic: true })
 
-const sessions = reactive<PagedResult<SessionRecord>>({
-  projectId: '',
-  rangeStart: '',
-  rangeEnd: '',
-  page: 1,
-  pageSize: 50,
-  total: 0,
-  items: [],
-})
-
-const traffic = reactive<PagedResult<TrafficMetricRecord>>({
-  projectId: '',
-  rangeStart: '',
-  rangeEnd: '',
-  page: 1,
-  pageSize: 50,
-  total: 0,
-  items: [],
-})
-
+// Loading States
+const countersLoading = ref(false)
 const overviewLoading = ref(false)
 const trendsLoading = ref(false)
 const topEventsLoading = ref(false)
@@ -439,6 +460,15 @@ const eventsLoading = ref(false)
 const devicesLoading = ref(false)
 const sessionsLoading = ref(false)
 const trafficLoading = ref(false)
+const trafficTrendsLoading = ref(false)
+const topPagesLoading = ref(false)
+const topReferrersLoading = ref(false)
+
+// --- 3. Utility Functions ---
+const getErrorMessage = (err: unknown, fallback: string) => {
+  const e = err as { response?: { data?: ErrorPayload } }
+  return e.response?.data?.error?.message || fallback
+}
 
 const cleanParams = <T extends Record<string, unknown>>(params: T): T => {
   return Object.fromEntries(
@@ -460,7 +490,99 @@ const requireProject = () => {
   }
   return true
 }
+// --- 4. Layout Management ---
+const defaultLayouts: Record<'operations' | 'technical', DashboardItem[]> = {
+  operations: [
+    { x: 0, y: 0, w: 12, h: 4, i: 'overview_default' , minW: 6, minH: 3 },
+    { x: 0, y: 4, w: 8, h: 10, i: 'trends_default' , minW: 4, minH: 6 },
+    { x: 8, y: 4, w: 4, h: 10, i: 'topEvents_default' , minW: 3, minH: 6 },
+    { x: 0, y: 14, w: 6, h: 10, i: 'trafficTrends_default' , minW: 4, minH: 6 },
+    { x: 6, y: 14, w: 6, h: 10, i: 'rankings_default' , minW: 4, minH: 6 },
+    { x: 0, y: 24, w: 12, h: 8, i: 'counters_default' , minW: 4, minH: 4 },
+  ],
+  technical: [
+    { x: 0, y: 0, w: 12, h: 12, i: 'events_default' , minW: 6, minH: 8 },
+    { x: 0, y: 12, w: 6, h: 10, i: 'devices_default' , minW: 4, minH: 6 },
+    { x: 6, y: 12, w: 6, h: 10, i: 'sessions_default' , minW: 4, minH: 6 },
+  ],
+}
 
+const getWidgetLabel = (id: string) => {
+  const type = id.split('_')[0]
+  if (type === 'trafficTrends') return t('metrics.chart.pageViews')
+  if (type === 'rankings') return t('metrics.topPages')
+  return t(`metrics.${type}`)
+}
+
+const removeWidget = (id: string) => {
+  dashboardLayout.value = dashboardLayout.value.filter(item => item.i !== id)
+}
+
+const resetToDefaultLayout = () => {
+  dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[activeSpace.value]))
+  saveLayout()
+}
+
+const saveLayout = () => {
+  if (!activeSpace.value || dashboardLayout.value.length === 0) return
+  localStorage.setItem(`dashboard_layout_${activeSpace.value}`, JSON.stringify(dashboardLayout.value))
+}
+
+const loadLayout = () => {
+  const saved = localStorage.getItem(`dashboard_layout_${activeSpace.value}`)
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved)
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        dashboardLayout.value = parsed
+      } else {
+        dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[activeSpace.value]))
+      }
+    } catch {
+      dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[activeSpace.value]))
+    }
+  } else {
+    dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[activeSpace.value]))
+  }
+}
+
+// --- 5. Formatting & Computation ---
+const numberFormatter = computed(() =>
+  new Intl.NumberFormat(locale.value === 'zh' ? 'zh-CN' : 'en-US')
+)
+const formatNumber = (value: number) => numberFormatter.value.format(value)
+
+const formatTimestamp = (value: number) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
+}
+
+const formatDuration = (value: number) => {
+  if (!value || value <= 0) return '0s'
+  const seconds = Math.floor(value / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  if (hours > 0) return `${hours}h ${minutes % 60}m`
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`
+  return `${seconds}s`
+}
+
+const formatJson = (value: Record<string, unknown> | null) => {
+  if (!value) return '-'
+  try { return JSON.stringify(value) } catch { return '-' }
+}
+
+const overviewItems = computed(() => {
+  if (!overview.value) return {}
+  return {
+    [t('metrics.overviewItems.devicesTotal')]: formatNumber(overview.value.devicesTotal),
+    [t('metrics.overviewItems.devicesActive')]: formatNumber(overview.value.devicesActive),
+    [t('metrics.overviewItems.sessionsTotal')]: formatNumber(overview.value.sessionsTotal),
+    [t('metrics.overviewItems.avgSessionDuration')]: formatDuration(overview.value.avgSessionDurationMs),
+  }
+})
+
+// --- 6. Metric Loading Functions ---
 const loadOverview = async () => {
   if (!requireProject()) return
   overviewLoading.value = true
@@ -478,13 +600,7 @@ const loadTrends = async () => {
   if (!requireProject()) return
   trendsLoading.value = true
   try {
-    const res = await getMetricsTrends(
-      cleanParams({
-        projectId: filters.projectId,
-        granularity: filters.granularity,
-        ...rangeParams(),
-      })
-    )
+    const res = await getMetricsTrends(cleanParams({ projectId: filters.projectId, granularity: filters.granularity, ...rangeParams() }))
     trends.value = res.data.data
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('errors.trendsFailed')))
@@ -497,13 +613,7 @@ const loadTopEvents = async () => {
   if (!requireProject()) return
   topEventsLoading.value = true
   try {
-    const res = await getTopEvents(
-      cleanParams({
-        projectId: filters.projectId,
-        limit: filters.topEventsLimit,
-        ...rangeParams(),
-      })
-    )
+    const res = await getTopEvents(cleanParams({ projectId: filters.projectId, limit: filters.topEventsLimit, ...rangeParams() }))
     topEvents.value = res.data.data
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('errors.topEventsFailed')))
@@ -516,17 +626,7 @@ const loadEvents = async () => {
   if (!requireProject()) return
   eventsLoading.value = true
   try {
-    const res = await getEvents(
-      cleanParams({
-        projectId: filters.projectId,
-        page: events.page,
-        pageSize: events.pageSize,
-        eventType: filters.eventType,
-        userId: filters.userId,
-        deviceId: filters.deviceId,
-        ...rangeParams(),
-      })
-    )
+    const res = await getEvents(cleanParams({ projectId: filters.projectId, page: events.page, pageSize: events.pageSize, eventType: filters.eventType, userId: filters.userId, deviceId: filters.deviceId, ...rangeParams() }))
     Object.assign(events, res.data.data)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('errors.eventsFailed')))
@@ -539,17 +639,7 @@ const loadDevices = async () => {
   if (!requireProject()) return
   devicesLoading.value = true
   try {
-    const res = await getDevices(
-      cleanParams({
-        projectId: filters.projectId,
-        page: devices.page,
-        pageSize: devices.pageSize,
-        deviceId: filters.deviceId,
-        apiKey: filters.apiKey,
-        isBanned: filters.isBanned === '' ? undefined : filters.isBanned === 'true',
-        ...rangeParams(),
-      })
-    )
+    const res = await getDevices(cleanParams({ projectId: filters.projectId, page: devices.page, pageSize: devices.pageSize, deviceId: filters.deviceId, apiKey: filters.apiKey, isBanned: filters.isBanned === '' ? undefined : filters.isBanned === 'true', ...rangeParams() }))
     Object.assign(devices, res.data.data)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('errors.devicesFailed')))
@@ -562,17 +652,7 @@ const loadSessions = async () => {
   if (!requireProject()) return
   sessionsLoading.value = true
   try {
-    const res = await getSessions(
-      cleanParams({
-        projectId: filters.projectId,
-        page: sessions.page,
-        pageSize: sessions.pageSize,
-        sessionId: filters.sessionId,
-        userId: filters.userId,
-        deviceId: filters.deviceId,
-        ...rangeParams(),
-      })
-    )
+    const res = await getSessions(cleanParams({ projectId: filters.projectId, page: sessions.page, pageSize: sessions.pageSize, sessionId: filters.sessionId, userId: filters.userId, deviceId: filters.deviceId, ...rangeParams() }))
     Object.assign(sessions, res.data.data)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('errors.sessionsFailed')))
@@ -581,22 +661,57 @@ const loadSessions = async () => {
   }
 }
 
+const loadTrafficTrends = async () => {
+  if (!requireProject()) return
+  trafficTrendsLoading.value = true
+  try {
+    const res = await getTrafficTrends(cleanParams({ projectId: filters.projectId, granularity: filters.granularity, ...rangeParams() }))
+    trafficTrends.value = res.data.data
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('errors.trafficTrendsFailed')))
+  } finally {
+    trafficTrendsLoading.value = false
+  }
+}
+
+const loadTopPages = async () => {
+  if (!requireProject()) return
+  topPagesLoading.value = true
+  try {
+    const res = await getTopPages(cleanParams({ projectId: filters.projectId, limit: filters.topEventsLimit, ...rangeParams() }))
+    topPages.value = res.data.data
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('errors.topPagesFailed')))
+  } finally {
+    topPagesLoading.value = false
+  }
+}
+
+const loadTopReferrers = async () => {
+  if (!requireProject()) return
+  topReferrersLoading.value = true
+  try {
+    const res = await getTopReferrers(cleanParams({ projectId: filters.projectId, limit: filters.topEventsLimit, ...rangeParams() }))
+    topReferrers.value = res.data.data
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('errors.topReferrersFailed')))
+  } finally {
+    topReferrersLoading.value = false
+  }
+}
+
 const loadTraffic = async () => {
   if (!requireProject()) return
   trafficLoading.value = true
   try {
-    const res = await getTrafficMetrics(
-      cleanParams({
-        projectId: filters.projectId,
-        page: traffic.page,
-        pageSize: traffic.pageSize,
-        metricType: filters.metricType,
-        userId: filters.userId,
-        deviceId: filters.deviceId,
-        sessionId: filters.sessionId,
-        ...rangeParams(),
-      })
-    )
+    if (filters.platform === 'web') {
+      const summaryRes = await getTrafficSummary(cleanParams({ projectId: filters.projectId, ...rangeParams() }))
+      trafficSummary.value = summaryRes.data.data
+      await Promise.all([loadTrafficTrends(), loadTopPages(), loadTopReferrers()])
+    } else {
+      trafficSummary.value = null; trafficTrends.value = null; topPages.value = []; topReferrers.value = []
+    }
+    const res = await getTrafficMetrics(cleanParams({ projectId: filters.projectId, page: traffic.page, pageSize: traffic.pageSize, metricType: filters.metricType, userId: filters.userId, deviceId: filters.deviceId, sessionId: filters.sessionId, ...rangeParams() }))
     Object.assign(traffic, res.data.data)
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('errors.trafficFailed')))
@@ -605,161 +720,99 @@ const loadTraffic = async () => {
   }
 }
 
+const loadCounters = async () => {
+  if (!requireProject()) return
+  countersLoading.value = true
+  try {
+    const res = await getCounters({ projectId: filters.projectId })
+    counters.value = res.data.data.items
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('errors.countersFailed')))
+  } finally {
+    countersLoading.value = false
+  }
+}
+
+// --- 7. Action Handlers ---
+const handleIncrementCounter = async (row: CounterItem) => {
+  try {
+    await incrementCounter(row.key, { projectId: filters.projectId })
+    ElMessage.success(t('buttons.increment') + ' ' + t('messages.initSuccess'))
+    await loadCounters()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('errors.networkFailed')))
+  }
+}
+
+const showEditCounterDialog = (row: CounterItem) => {
+  counterForm.key = row.key
+  counterForm.value = row.value
+  counterForm.isPublic = row.isPublic
+  counterDialogVisible.value = true
+}
+
+const handleSaveCounter = async () => {
+  try {
+    await setCounter(counterForm.key, { projectId: filters.projectId, value: counterForm.value, isPublic: counterForm.isPublic })
+    ElMessage.success(t('messages.projectUpdated'))
+    counterDialogVisible.value = false
+    await loadCounters()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('messages.saveProjectFailed')))
+  }
+}
+
+const resetPages = () => {
+  events.page = 1; devices.page = 1; sessions.page = 1; traffic.page = 1
+}
+
+const handleEventsPageChange = (page: number) => { events.page = page; loadEvents() }
+const handleDevicesPageChange = (page: number) => { devices.page = page; loadDevices() }
+const handleSessionsPageChange = (page: number) => { sessions.page = page; loadSessions() }
+const handleTrafficPageChange = (page: number) => { traffic.page = page; loadTraffic() }
+
 const refreshAll = async () => {
   if (!requireProject()) return
   refreshing.value = true
   try {
     resetPages()
-    await Promise.all([loadOverview(), loadTrends(), loadTopEvents()])
-    await loadActiveTab()
+    const loadPromises: Promise<void>[] = []
+    for (const item of dashboardLayout.value) {
+      if (item.i.startsWith('overview')) loadPromises.push(loadOverview())
+      else if (item.i.startsWith('trends')) loadPromises.push(loadTrends())
+      else if (item.i.startsWith('topEvents')) loadPromises.push(loadTopEvents())
+      else if (item.i.startsWith('trafficTrends')) loadPromises.push(loadTrafficTrends())
+      else if (item.i.startsWith('rankings')) loadPromises.push(loadTopPages())
+      else if (item.i.startsWith('counters')) loadPromises.push(loadCounters())
+      else if (item.i.startsWith('traffic')) loadPromises.push(loadTraffic())
+      else if (item.i.startsWith('events')) loadPromises.push(loadEvents())
+      else if (item.i.startsWith('devices')) loadPromises.push(loadDevices())
+      else if (item.i.startsWith('sessions')) loadPromises.push(loadSessions())
+    }
+    await Promise.all(loadPromises)
   } finally {
     refreshing.value = false
   }
 }
 
-const loadActiveTab = async () => {
-  if (activeTab.value === 'events') {
-    await loadEvents()
-  } else if (activeTab.value === 'devices') {
-    await loadDevices()
-  } else if (activeTab.value === 'sessions') {
-    await loadSessions()
-  } else if (activeTab.value === 'traffic') {
-    await loadTraffic()
-  }
-}
-
-const resetPages = () => {
-  events.page = 1
-  devices.page = 1
-  sessions.page = 1
-  traffic.page = 1
-}
-
-watch(activeTab, async () => {
-  if (!filters.projectId) return
-  await loadActiveTab()
-})
-
-watch(
-  routeProjectId,
-  (value) => {
-    if (value && value !== filters.projectId) {
-      filters.projectId = value
-    }
-  },
-  { immediate: true }
-)
-
-watch(
-  () => filters.projectId,
-  async () => {
-    resetPages()
-    await refreshAll()
-  }
-)
-
-const handleEventsPageChange = (page: number) => {
-  events.page = page
-  loadEvents()
-}
-
-const handleEventsSizeChange = (size: number) => {
-  events.pageSize = size
-  events.page = 1
-  loadEvents()
-}
-
-const handleDevicesPageChange = (page: number) => {
-  devices.page = page
-  loadDevices()
-}
-
-const handleDevicesSizeChange = (size: number) => {
-  devices.pageSize = size
-  devices.page = 1
-  loadDevices()
-}
-
-const handleSessionsPageChange = (page: number) => {
-  sessions.page = page
-  loadSessions()
-}
-
-const handleSessionsSizeChange = (size: number) => {
-  sessions.pageSize = size
-  sessions.page = 1
-  loadSessions()
-}
-
-const handleTrafficPageChange = (page: number) => {
-  traffic.page = page
-  loadTraffic()
-}
-
-const handleTrafficSizeChange = (size: number) => {
-  traffic.pageSize = size
-  traffic.page = 1
-  loadTraffic()
-}
-
-const numberFormatter = computed(() =>
-  new Intl.NumberFormat(locale.value === 'zh' ? 'zh-CN' : 'en-US')
-)
-const formatNumber = (value: number) => numberFormatter.value.format(value)
-
-const formatDateTime = (value: string) => {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
-}
-
-const formatDate = (value: string) => {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
-}
-
-const formatTimestamp = (value: number) => {
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
-}
-
-const formatDuration = (value: number) => {
-  if (!value || value <= 0) return '0s'
-  const seconds = Math.floor(value / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`
-  }
-  return `${seconds}s`
-}
-
-const formatJson = (value: Record<string, unknown> | null) => {
-  if (!value) return '-'
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return '-'
-  }
-}
-
-const trendPath = (key: 'events' | 'sessions') => {
-  if (!trends.value?.points?.length) return ''
-  const values = trends.value.points.map((point) => point[key])
-  const max = Math.max(...values, 1)
-  const min = Math.min(...values, 0)
-  const range = max - min || 1
-  const step = values.length > 1 ? 100 / (values.length - 1) : 0
-  return values
-    .map((value, index) => {
-      const x = index * step
-      const y = 40 - ((value - min) / range) * 40
-      return `${index === 0 ? 'M' : 'L'}${x},${y}`
-    })
-    .join(' ')
+const trendPath = (type: 'events' | 'sessions' | 'pageViews' | 'visitors') => {
+  const data = (type === 'pageViews' || type === 'visitors') ? trafficTrends.value : trends.value
+  if (!data || data.points.length < 2) return ''
+  const values = data.points.map((p) => {
+    if (type === 'events' && 'events' in p) return p.events
+    if (type === 'sessions' && 'sessions' in p) return p.sessions
+    if (type === 'pageViews' && 'pageViews' in p) return p.pageViews
+    if (type === 'visitors' && 'visitors' in p) return p.visitors
+    return 0
+  })
+  const max = Math.max(...values) || 1
+  const width = 100, height = 40
+  const points = values.map((val, i) => {
+    const x = (i / (values.length - 1)) * width
+    const y = height - (val / max) * height
+    return `${x},${y}`
+  })
+  return `M ${points.join(' L ')}`
 }
 
 const loadProjects = async () => {
@@ -767,18 +820,55 @@ const loadProjects = async () => {
     const res = await getProjects()
     projects.value = res.data.data
     const firstProject = projects.value[0]
-    if (routeProjectId.value) {
-      filters.projectId = routeProjectId.value
-    } else if (!filters.projectId && firstProject) {
-      filters.projectId = firstProject.projectId
-    }
+    if (routeProjectId.value) filters.projectId = routeProjectId.value
+    else if (!filters.projectId && firstProject) filters.projectId = firstProject.projectId
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   }
 }
 
+const layoutVisible = ref(false)
+
+// --- 8. Watchers & Lifecycle ---
+watch(activeSpace, async () => {
+  layoutVisible.value = false // 1. 强制销毁组件
+  isLayoutEditable.value = false
+  dashboardLayout.value = []
+  
+  await nextTick()
+  // 增加微小延迟，确保 DOM 容器宽度计算完成，防止布局挤死在左侧
+  setTimeout(async () => {
+    loadLayout()
+    if (filters.projectId) await refreshAll()
+    layoutVisible.value = true // 2. 数据准备好后再挂载
+  }, 50)
+})
+
+watch(() => filters.projectId, async () => {
+  resetPages()
+  await refreshAll()
+})
+
+watch(() => filters.platform, async () => {
+  if (filters.platform === 'web') {
+    if (!filters.metricType) filters.metricType = 'page_view'
+  } else {
+    if (!filters.metricType) filters.metricType = 'screen_view'
+  }
+  traffic.page = 1
+  await loadTraffic()
+})
+
+watch(dashboardLayout, saveLayout, { deep: true })
+
 onMounted(() => {
-  loadProjects()
+  // 使用延迟初始化，避开首帧容器宽度为 0 的问题
+  setTimeout(async () => {
+    loadLayout()
+    await loadProjects()
+    if (filters.projectId) await refreshAll()
+    layoutVisible.value = true
+  }, 100)
 })
 </script>
 
@@ -791,31 +881,132 @@ onMounted(() => {
 }
 
 .header-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: white;
   border-radius: 18px;
-  padding: 32px;
+  padding: 24px;
   margin-bottom: 24px;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.02);
+}
+
+.header-main {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  gap: 24px;
+  margin-bottom: 20px;
 }
 
-.header-title {
-  font-size: 32px;
-  font-weight: 700;
-  color: #1d1d1f;
-  margin-bottom: 6px;
-  letter-spacing: -0.02em;
+.filter-bar-compact {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid #f5f5f7;
 }
 
-.header-subtitle {
-  color: #86868b;
-  font-size: 14px;
-  margin: 0;
+.compact-form :deep(.el-form-item) {
+  margin-bottom: 0;
+  margin-right: 12px;
+}
+
+.workspace-area {
+  width: 100%;
+  min-height: calc(100vh - 300px);
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px dashed #dcdfe6;
+  display: block;
+  box-sizing: border-box;
+}
+
+.dashboard-grid {
+  transition: all 0.3s ease;
+}
+
+.grid-item-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.grid-item-card.is-editing {
+  overflow: visible !important;
+  border: 1px solid #409eff;
+  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.15);
+  z-index: 100;
+}
+
+:deep(.vue-resizable-handle) {
+  z-index: 1000 !important;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.grid-item-card.is-editing :deep(.vue-resizable-handle) {
+  opacity: 1;
+  background-color: #409eff;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  bottom: 0px;
+  right: 0px;
+  cursor: nwse-resize;
+}
+
+
+.widget-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.widget-header-bar {
+  background: #f5f7fa;
+  padding: 6px 12px;
+  border-bottom: 1px solid #ebeef5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: default;
+}
+
+.widget-drag-handle {
+  cursor: move;
+  color: #909399;
+  display: flex;
+  align-items: center;
+}
+
+.widget-label {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: #606266;
+}
+
+.widget-inner {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  background: white;
+}
+
+/* Scrollbar for widgets */
+.widget-inner::-webkit-scrollbar {
+  width: 4px;
+}
+.widget-inner::-webkit-scrollbar-thumb {
+  background: #e4e7ed;
+  border-radius: 2px;
+}
+
+.header-main-left {
+  flex: 1;
 }
 
 .header-actions {
@@ -824,86 +1015,63 @@ onMounted(() => {
   gap: 12px;
 }
 
-.content-card {
-  background: white;
-  border-radius: 24px;
-  padding: 24px;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
-  margin-bottom: 24px;
-}
-
-.filter-form :deep(.el-form-item) {
-  margin-bottom: 0;
-}
-
-.metrics-tabs :deep(.el-tabs__header) {
-  margin: 0 0 12px;
-}
-
-.overview-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-}
-
-.overview-item {
-  background: #f5f5f7;
-  border-radius: 16px;
-  padding: 18px;
-}
-
-.overview-item p {
-  margin: 0 0 6px;
-  color: #86868b;
-  font-size: 13px;
-}
-
-.overview-item h3 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.trend-chart {
-  margin-bottom: 16px;
-}
-
-.chart-legend {
+.custom-segmented-control {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  background: #f1f1f1;
+  padding: 3px;
+  border-radius: 10px;
+  user-select: none;
+}
+
+.segment-item {
+  padding: 6px 16px;
   font-size: 13px;
-  color: #86868b;
-  margin-bottom: 8px;
+  font-weight: 600;
+  color: #636366;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  min-width: 80px;
 }
 
-.legend-dot {
-  display: inline-block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  margin-right: 6px;
+.segment-item:hover:not(.is-active) {
+  color: #1d1d1f;
+  background: rgba(0, 0, 0, 0.05);
 }
 
-.legend-dot.events {
-  background: #0071e3;
+.segment-item.is-active {
+  background: #ffffff;
+  color: #0071e3;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-.legend-dot.sessions {
-  background: #34c759;
+.divider-vertical {
+  width: 1px;
+  height: 20px;
+  background: #e4e7ed;
+  margin: 0 4px;
+}
+
+.widget-footer-mini {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
 }
 
 .trend-svg {
   width: 100%;
-  height: 160px;
+  height: 100px;
   background: #f5f5f7;
-  border-radius: 16px;
+  border-radius: 12px;
+  margin-top: 10px;
 }
 
 .trend-line {
   fill: none;
   stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .trend-line.events {
@@ -911,47 +1079,71 @@ onMounted(() => {
 }
 
 .trend-line.sessions {
-  stroke: #34c759;
+  stroke: #ff9500;
 }
 
-.chart-meta {
-  margin-top: 10px;
+.chart-legend {
   display: flex;
-  justify-content: space-between;
-  color: #86868b;
+  justify-content: center;
+  gap: 16px;
   font-size: 12px;
+  margin-bottom: 8px;
 }
 
-.table-space {
-  margin-top: 16px;
+.legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
 }
 
-.table-footer {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
+.legend-dot.events {
+  background-color: #0071e3;
 }
 
-.mono {
-  font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-}
-
-.empty-state {
-  text-align: center;
-  color: #86868b;
-  padding: 24px 0;
+.legend-dot.sessions {
+  background-color: #ff9500;
 }
 
 @media (max-width: 960px) {
-  .header-card {
+  .header-main {
     flex-direction: column;
     align-items: flex-start;
+    gap: 16px;
   }
+}
 
-  .header-actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
+/* Overview Widget Styling */
+.overview-grid-compact {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  padding: 4px;
+}
+
+.overview-mini-card {
+  background: #f5f7fa;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+  transition: all 0.2s;
+}
+
+.overview-mini-card:hover {
+  background: #e6e8eb;
+  transform: translateY(-2px);
+}
+
+.mini-label {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 4px;
+}
+
+.mini-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
 }
 </style>
