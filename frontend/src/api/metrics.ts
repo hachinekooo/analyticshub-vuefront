@@ -223,6 +223,7 @@ export const getTrafficSummary = (params: {
   projectId: string
   from?: string
   to?: string
+  granularity?: string
 }) => {
   return request.get<ApiResponse<TrafficSummary>>('/admin/traffic-metrics/summary', { params })
 }

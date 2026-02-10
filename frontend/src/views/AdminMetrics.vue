@@ -215,8 +215,9 @@
                       <span>{{ t('metrics.traffic') }}</span>
                    </div>
                    <el-table :data="traffic.items" size="small" style="width: 100%">
-                      <el-table-column prop="metricType" :label="t('tables.metricType')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="120" show-overflow-tooltip />
                       <el-table-column prop="pagePath" :label="t('tables.page')" min-width="200" show-overflow-tooltip />
+                      <el-table-column prop="referrer" :label="t('tables.referrer')" min-width="150" show-overflow-tooltip />
                       <el-table-column prop="metricTimestamp" :label="t('tables.eventTime')" min-width="140">
                          <template #default="{ row }">{{ formatTimestamp(row.metricTimestamp) }}</template>
                       </el-table-column>
@@ -268,8 +269,13 @@
                    <el-table :data="devices.items" size="small" style="width: 100%">
                       <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="120" show-overflow-tooltip />
                       <el-table-column prop="deviceModel" :label="t('tables.model')" min-width="120" show-overflow-tooltip />
-                      <el-table-column prop="osVersion" :label="t('tables.osVersion')" min-width="120" />
-                      <el-table-column prop="isBanned" :label="t('tables.status')" min-width="120">
+                      <el-table-column prop="createdAt" :label="t('tables.startTime')" min-width="140">
+                         <template #default="{ row }">{{ formatTimestamp(new Date(row.createdAt).getTime()) }}</template>
+                      </el-table-column>
+                      <el-table-column prop="lastActiveAt" :label="t('tables.lastActive')" min-width="140">
+                         <template #default="{ row }">{{ formatTimestamp(new Date(row.lastActiveAt).getTime()) }}</template>
+                      </el-table-column>
+                      <el-table-column prop="isBanned" :label="t('tables.status')" min-width="100">
                         <template #default="{ row }">
                           <el-tag size="small" :type="row.isBanned ? 'danger' : 'success'">
                             {{ row.isBanned ? t('status.banned') : t('status.normal') }}
@@ -417,7 +423,7 @@ const dashboardLayout = ref<DashboardItem[]>([])
 
 // Filters & Params
 const filters = reactive({
-  projectId: '',
+  projectId: import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
   dateRange: null as string[] | null,
   granularity: 'day' as 'day' | 'hour',
   topEventsLimit: 10,
@@ -501,9 +507,10 @@ const defaultLayouts: Record<'operations' | 'technical', DashboardItem[]> = {
     { x: 0, y: 24, w: 12, h: 8, i: 'counters_default' , minW: 4, minH: 4 },
   ],
   technical: [
-    { x: 0, y: 0, w: 12, h: 12, i: 'events_default' , minW: 6, minH: 8 },
-    { x: 0, y: 12, w: 6, h: 10, i: 'devices_default' , minW: 4, minH: 6 },
-    { x: 6, y: 12, w: 6, h: 10, i: 'sessions_default' , minW: 4, minH: 6 },
+    { x: 0, y: 0, w: 6, h: 12, i: 'events_default', minW: 4, minH: 8 },
+    { x: 6, y: 0, w: 6, h: 12, i: 'traffic_default', minW: 4, minH: 8 },
+    { x: 0, y: 12, w: 6, h: 10, i: 'devices_default', minW: 4, minH: 6 },
+    { x: 6, y: 12, w: 6, h: 10, i: 'sessions_default', minW: 4, minH: 6 },
   ],
 }
 
@@ -574,12 +581,23 @@ const formatJson = (value: Record<string, unknown> | null) => {
 
 const overviewItems = computed(() => {
   if (!overview.value) return {}
-  return {
+  const base = {
     [t('metrics.overviewItems.devicesTotal')]: formatNumber(overview.value.devicesTotal),
     [t('metrics.overviewItems.devicesActive')]: formatNumber(overview.value.devicesActive),
     [t('metrics.overviewItems.sessionsTotal')]: formatNumber(overview.value.sessionsTotal),
     [t('metrics.overviewItems.avgSessionDuration')]: formatDuration(overview.value.avgSessionDurationMs),
   }
+
+  // Add traffic PV/UV if available (usually for Website platform)
+  if (trafficSummary.value) {
+    return {
+      ...base,
+      [t('metrics.chart.pageViews')]: formatNumber(trafficSummary.value.pageViews),
+      [t('metrics.chart.visitors')]: formatNumber(trafficSummary.value.visitors),
+    }
+  }
+
+  return base
 })
 
 // --- 6. Metric Loading Functions ---
@@ -587,8 +605,18 @@ const loadOverview = async () => {
   if (!requireProject()) return
   overviewLoading.value = true
   try {
-    const res = await getMetricsOverview(cleanParams({ projectId: filters.projectId, ...rangeParams() }))
-    overview.value = res.data.data
+    const params = cleanParams({ projectId: filters.projectId, ...rangeParams() })
+    const [overviewRes, trafficRes] = await Promise.all([
+      getMetricsOverview(params),
+      filters.platform === 'web' 
+        ? getTrafficSummary({ ...params, granularity: filters.granularity }) 
+        : Promise.resolve(null)
+    ])
+    
+    overview.value = overviewRes.data.data
+    if (trafficRes && 'data' in trafficRes) {
+      trafficSummary.value = trafficRes.data.data
+    }
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('errors.overviewFailed')))
   } finally {
@@ -705,7 +733,11 @@ const loadTraffic = async () => {
   trafficLoading.value = true
   try {
     if (filters.platform === 'web') {
-      const summaryRes = await getTrafficSummary(cleanParams({ projectId: filters.projectId, ...rangeParams() }))
+      const summaryRes = await getTrafficSummary(cleanParams({ 
+        projectId: filters.projectId, 
+        granularity: filters.granularity,
+        ...rangeParams() 
+      }))
       trafficSummary.value = summaryRes.data.data
       await Promise.all([loadTrafficTrends(), loadTopPages(), loadTopReferrers()])
     } else {
