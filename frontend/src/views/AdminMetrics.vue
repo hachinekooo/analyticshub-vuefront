@@ -68,8 +68,11 @@
             style="width: 240px"
           />
           <el-select v-model="filters.granularity" style="width: 100px" v-if="activeSpace === 'operations'">
-            <el-option :label="t('filters.daily')" value="day" />
             <el-option :label="t('filters.hourly')" value="hour" />
+            <el-option :label="t('filters.daily')" value="day" />
+            <el-option :label="t('filters.weekly')" value="week" />
+            <el-option :label="t('filters.monthly')" value="month" />
+            <el-option :label="t('filters.yearly')" value="year" />
           </el-select>
           
           <template v-if="activeSpace === 'technical'">
@@ -86,8 +89,7 @@
 
       <div class="workspace-area">
         <grid-layout
-          v-if="layoutVisible && dashboardLayout.length > 0"
-          :key="activeSpace"
+          v-if="layoutVisible"
           v-model:layout="dashboardLayout"
           :col-num="12"
           :row-height="30"
@@ -95,6 +97,7 @@
           :is-resizable="isLayoutEditable"
           :vertical-compact="true"
           :use-css-transforms="true"
+          @layout-updated="handleResize"
           class="dashboard-grid"
         >
           <grid-item v-for="item in dashboardLayout"
@@ -139,16 +142,7 @@
                    <div class="widget-header">
                       <span>{{ t('metrics.trends') }}</span>
                    </div>
-                   <div v-if="trends && trends.points.length" class="trend-chart-full">
-                      <div class="chart-legend">
-                        <span class="legend-dot events"></span> {{ t('metrics.chart.events') }}
-                        <span class="legend-dot sessions"></span> {{ t('metrics.chart.sessions') }}
-                      </div>
-                      <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="trend-svg">
-                        <path :d="trendPath('events')" class="trend-line events" />
-                        <path :d="trendPath('sessions')" class="trend-line sessions" />
-                      </svg>
-                   </div>
+                   <div :id="'chart-business-' + item.i" class="echart-container"></div>
                 </div>
 
                 <!-- Top Events Widget -->
@@ -167,16 +161,7 @@
                    <div class="widget-header">
                       <span>{{ t('metrics.chart.pageViews') }} / {{ t('metrics.chart.visitors') }}</span>
                    </div>
-                   <div v-if="trafficTrends && trafficTrends.points.length" class="trend-chart-full">
-                      <div class="chart-legend">
-                        <span class="legend-dot events"></span> {{ t('metrics.chart.pageViews') }}
-                        <span class="legend-dot sessions"></span> {{ t('metrics.chart.visitors') }}
-                      </div>
-                      <svg viewBox="0 0 100 40" preserveAspectRatio="none" class="trend-svg">
-                        <path :d="trendPath('pageViews')" class="trend-line events" />
-                        <path :d="trendPath('visitors')" class="trend-line sessions" />
-                      </svg>
-                   </div>
+                   <div :id="'chart-traffic-' + item.i" class="echart-container"></div>
                 </div>
                 
                 <!-- Rankings Widget -->
@@ -346,7 +331,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import * as echarts from 'echarts'
 import { useI18n } from '@/i18n'
 import { GridLayout, GridItem } from 'vue3-grid-layout-next'
 import { useRoute } from 'vue-router'
@@ -425,7 +411,7 @@ const dashboardLayout = ref<DashboardItem[]>([])
 const filters = reactive({
   projectId: import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
   dateRange: null as string[] | null,
-  granularity: 'day' as 'day' | 'hour',
+  granularity: 'day' as 'day' | 'hour' | 'week' | 'month' | 'year',
   topEventsLimit: 10,
   eventType: '',
   userId: '',
@@ -827,25 +813,126 @@ const refreshAll = async () => {
   }
 }
 
-const trendPath = (type: 'events' | 'sessions' | 'pageViews' | 'visitors') => {
-  const data = (type === 'pageViews' || type === 'visitors') ? trafficTrends.value : trends.value
-  if (!data || data.points.length < 2) return ''
-  const values = data.points.map((p) => {
-    if (type === 'events' && 'events' in p) return p.events
-    if (type === 'sessions' && 'sessions' in p) return p.sessions
-    if (type === 'pageViews' && 'pageViews' in p) return p.pageViews
-    if (type === 'visitors' && 'visitors' in p) return p.visitors
-    return 0
-  })
-  const max = Math.max(...values) || 1
-  const width = 100, height = 40
-  const points = values.map((val, i) => {
-    const x = (i / (values.length - 1)) * width
-    const y = height - (val / max) * height
-    return `${x},${y}`
-  })
-  return `M ${points.join(' L ')}`
+const chartInstances: Record<string, echarts.ECharts> = {}
+let resizeObserver: ResizeObserver | null = null
+
+const initChart = (id: string, theme: string = 'light') => {
+  const el = document.getElementById(id)
+  if (!el) return null
+  
+  if (chartInstances[id]) {
+    chartInstances[id].dispose()
+  }
+
+  // Create chart
+  const chart = echarts.init(el, theme)
+  chartInstances[id] = chart
+
+  // Setup ResizeObserver to handle fluid layouts perfectly
+  if (!resizeObserver) {
+    resizeObserver = new ResizeObserver(() => {
+      handleResize()
+    })
+  }
+  resizeObserver.observe(el)
+  
+  return chart
 }
+
+const handleResize = () => {
+  // Use requestAnimationFrame for smoother rendering during transitions
+  requestAnimationFrame(() => {
+    Object.values(chartInstances).forEach(chart => {
+      if (chart) chart.resize()
+    })
+  })
+}
+
+const updateBusinessTrendsChart = () => {
+  const widget = dashboardLayout.value.find(w => w.i.startsWith('trends'))
+  if (!widget) return
+  const id = 'chart-business-' + widget.i
+  const chart = chartInstances[id] || initChart(id)
+  if (!chart || !trends.value) return
+
+  const option = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: [t('metrics.chart.events'), t('metrics.chart.sessions')], bottom: 0 },
+    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: trends.value.points.map(p => {
+        const d = new Date(p.time)
+        return filters.granularity === 'hour' ? d.getHours() + ':00' : d.toLocaleDateString()
+      })
+    },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        name: t('metrics.chart.events'),
+        type: 'line',
+        smooth: true,
+        data: trends.value.points.map(p => p.events),
+        color: '#0071e3',
+        areaStyle: { opacity: 0.1 }
+      },
+      {
+        name: t('metrics.chart.sessions'),
+        type: 'line',
+        smooth: true,
+        data: trends.value.points.map(p => p.sessions),
+        color: '#ff9500',
+        areaStyle: { opacity: 0.1 }
+      }
+    ]
+  }
+  chart.setOption(option)
+}
+
+const updateTrafficTrendsChart = () => {
+  const widget = dashboardLayout.value.find(w => w.i.startsWith('trafficTrends'))
+  if (!widget) return
+  const id = 'chart-traffic-' + widget.i
+  const chart = chartInstances[id] || initChart(id)
+  if (!chart || !trafficTrends.value) return
+
+  const option = {
+    tooltip: { trigger: 'axis' },
+    legend: { data: [t('metrics.chart.pageViews'), t('metrics.chart.visitors')], bottom: 0 },
+    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: trafficTrends.value.points.map(p => {
+        const d = new Date(p.time)
+        return filters.granularity === 'hour' ? d.getHours() + ':00' : d.toLocaleDateString()
+      })
+    },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        name: t('metrics.chart.pageViews'),
+        type: 'line',
+        smooth: true,
+        data: trafficTrends.value.points.map(p => p.pageViews),
+        color: '#34c759',
+        areaStyle: { opacity: 0.1 }
+      },
+      {
+        name: t('metrics.chart.visitors'),
+        type: 'line',
+        smooth: true,
+        data: trafficTrends.value.points.map(p => p.visitors),
+        color: '#5856d6',
+        areaStyle: { opacity: 0.1 }
+      }
+    ]
+  }
+  chart.setOption(option)
+}
+
+
 
 const loadProjects = async () => {
   try {
@@ -872,8 +959,13 @@ watch(activeSpace, async () => {
   setTimeout(async () => {
     loadLayout()
     if (filters.projectId) await refreshAll()
-    layoutVisible.value = true // 2. 数据准备好后再挂载
-  }, 50)
+    layoutVisible.value = true
+    nextTick(() => {
+      handleResize() // Ensure charts are sized correctly after space switch
+      updateBusinessTrendsChart()
+      updateTrafficTrendsChart()
+    })
+  }, 100)
 })
 
 watch(() => filters.projectId, async () => {
@@ -893,14 +985,43 @@ watch(() => filters.platform, async () => {
 
 watch(dashboardLayout, saveLayout, { deep: true })
 
+watch(trends, () => nextTick(updateBusinessTrendsChart))
+watch(trafficTrends, () => nextTick(updateTrafficTrendsChart))
+watch(filters, async () => {
+  await refreshAll()
+  nextTick(() => {
+    updateBusinessTrendsChart()
+    updateTrafficTrendsChart()
+  })
+}, { deep: true })
+
+watch(isLayoutEditable, (val) => {
+  if (!val) {
+    nextTick(handleResize)
+  }
+})
+
 onMounted(() => {
-  // 使用延迟初始化，避开首帧容器宽度为 0 的问题
+  window.addEventListener('resize', handleResize)
   setTimeout(async () => {
     loadLayout()
     await loadProjects()
     if (filters.projectId) await refreshAll()
     layoutVisible.value = true
+    nextTick(() => {
+      updateBusinessTrendsChart()
+      updateTrafficTrendsChart()
+    })
   }, 100)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  Object.values(chartInstances).forEach(chart => chart.dispose())
 })
 </script>
 
@@ -1023,9 +1144,19 @@ onMounted(() => {
 
 .widget-inner {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
   background: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.widget-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 /* Scrollbar for widgets */
@@ -1037,52 +1168,12 @@ onMounted(() => {
   border-radius: 2px;
 }
 
-.header-main-left {
-  flex: 1;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.custom-segmented-control {
-  display: flex;
-  background: #f1f1f1;
-  padding: 3px;
-  border-radius: 10px;
-  user-select: none;
-}
-
-.segment-item {
-  padding: 6px 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #636366;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  text-align: center;
-  min-width: 80px;
-}
-
-.segment-item:hover:not(.is-active) {
-  color: #1d1d1f;
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.segment-item.is-active {
-  background: #ffffff;
-  color: #0071e3;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-
-.divider-vertical {
-  width: 1px;
-  height: 20px;
-  background: #e4e7ed;
-  margin: 0 4px;
+.echart-container {
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  /* Ensure it has a base size for ECharts to bite onto */
+  display: block;
 }
 
 .widget-footer-mini {
@@ -1136,6 +1227,54 @@ onMounted(() => {
 
 .legend-dot.sessions {
   background-color: #ff9500;
+}
+
+.header-main-left {
+  flex: 1;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.custom-segmented-control {
+  display: flex;
+  background: #f1f1f1;
+  padding: 3px;
+  border-radius: 10px;
+  user-select: none;
+}
+
+.segment-item {
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #636366;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  min-width: 80px;
+}
+
+.segment-item:hover:not(.is-active) {
+  color: #1d1d1f;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.segment-item.is-active {
+  background: #ffffff;
+  color: #0071e3;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.divider-vertical {
+  width: 1px;
+  height: 20px;
+  background: #e4e7ed;
+  margin: 0 4px;
 }
 
 @media (max-width: 960px) {

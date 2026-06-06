@@ -29,6 +29,7 @@ export interface Project {
   dbHost: string
   dbPort: number
   dbName: string
+  dbSchema: string
   dbUser: string
   dbPassword?: string
   tablePrefix: string
@@ -44,6 +45,7 @@ type ProjectPayload = {
   dbHost?: string
   dbPort?: number
   dbName?: string
+  dbSchema?: string
   dbUser?: string
   dbPassword?: string
   tablePrefix?: string
@@ -57,6 +59,7 @@ const buildProjectPayload = (data: Partial<Project>): ProjectPayload => {
     dbHost: data.dbHost,
     dbPort: data.dbPort,
     dbName: data.dbName,
+    dbSchema: data.dbSchema,
     dbUser: data.dbUser,
     tablePrefix: data.tablePrefix,
     isActive: data.isActive,

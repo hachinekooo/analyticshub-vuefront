@@ -48,6 +48,7 @@
               <p>
                 {{ t('dashboard.labels.id') }}: {{ project.projectId }} |
                 {{ t('dashboard.labels.db') }}: {{ project.dbName }} |
+                {{ t('dashboard.labels.schema') }}: {{ project.dbSchema }} |
                 {{ t('dashboard.labels.prefix') }}: {{ project.tablePrefix }}
               </p>
             </div>
@@ -143,6 +144,14 @@
             </el-form-item>
           </el-col>
            <el-col :span="12">
+            <el-form-item :label="t('form.dbSchema')">
+              <el-input v-model="form.dbSchema" :placeholder="t('form.placeholders.dbSchema')" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-row :gutter="20">
+           <el-col :span="12">
             <el-form-item :label="t('form.tablePrefix')">
               <el-input v-model="form.tablePrefix" :placeholder="t('form.placeholders.tablePrefix')" />
             </el-form-item>
@@ -227,12 +236,13 @@ const getErrorMessage = (err: unknown, fallback: string) => {
 }
 
 const getEmptyForm = (): Partial<Project> => ({
-  projectId: '',
-  projectName: '',
+  projectId: 'demo_project_prod',
+  projectName: 'Demo App Production',
   dbHost: 'localhost',
   dbPort: 5432,
-  dbName: '',
-  dbUser: 'postgres',
+  dbName: 'demo_project_prod',
+  dbSchema: 'analytics',
+  dbUser: 'demo_project_prod',
   dbPassword: '',
   tablePrefix: 'analytics_',
   isActive: true,

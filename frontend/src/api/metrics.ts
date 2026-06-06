@@ -1,6 +1,8 @@
 import request from '@/utils/request'
 import type { ApiResponse } from '@/api/admin'
 
+export type Granularity = 'hour' | 'day' | 'week' | 'month' | 'year'
+
 export type MetricsOverview = {
   projectId: string
   rangeStart: string
@@ -22,7 +24,7 @@ export type TrendPoint = {
 
 export type MetricsTrends = {
   projectId: string
-  granularity: 'day' | 'hour'
+  granularity: Granularity
   rangeStart: string
   rangeEnd: string
   points: TrendPoint[]
@@ -124,7 +126,7 @@ export type TrafficTrendPoint = {
 
 export type TrafficTrends = {
   projectId: string
-  granularity: 'day' | 'hour'
+  granularity: Granularity
   rangeStart: string
   rangeEnd: string
   points: TrafficTrendPoint[]
@@ -152,7 +154,7 @@ export const getMetricsTrends = (params: {
   projectId: string
   from?: string
   to?: string
-  granularity?: 'day' | 'hour'
+  granularity?: Granularity
 }) => {
   return request.get<ApiResponse<MetricsTrends>>('/admin/metrics/trends', { params })
 }
@@ -268,7 +270,7 @@ export const getTrafficTrends = (params: {
   projectId: string
   from?: string
   to?: string
-  granularity?: 'day' | 'hour'
+  granularity?: Granularity
 }) => {
   return request.get<ApiResponse<TrafficTrends>>('/admin/traffic-metrics/trends', { params })
 }

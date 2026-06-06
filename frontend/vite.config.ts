@@ -5,6 +5,8 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // 生产环境挂载在 /analyticshub，避免静态资源从官网根路径 /assets 加载。
+  base: '/analyticshub/',
   plugins: [
     vue(),
     vueDevTools(),
