@@ -16,11 +16,11 @@ type ErrorPayload = {
  * 配置说明：
  * - baseURL: 根据环境变量动态设置API基础路径
  *   - 开发环境: 使用Vite代理 (/api)
- *   - 生产环境: 使用Nginx代理路径 (/analyticshub)
+ *   - 生产环境: 使用Nginx代理路径 (/analyticshub/api)
  * - timeout: 请求超时时间设置为10秒
  */
 const service = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/analyticshub',
+  baseURL: import.meta.env.VITE_API_URL || '/analyticshub/api',
   timeout: 10000
 })
 

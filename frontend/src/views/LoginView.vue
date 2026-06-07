@@ -13,7 +13,8 @@ const loading = ref(false)
 const { t } = useI18n()
 
 const handleLogin = async () => {
-  if (!token.value) {
+  const adminToken = token.value.trim()
+  if (!adminToken) {
     error.value = t('login.emptyToken')
     return
   }
@@ -22,9 +23,9 @@ const handleLogin = async () => {
   error.value = ''
   
   try {
-    await validateAdminToken(token.value)
+    await validateAdminToken(adminToken)
     // Persist admin token for subsequent API calls and route guard checks.
-    localStorage.setItem('admin_token', token.value)
+    localStorage.setItem('admin_token', adminToken)
     const redirect = route.query.redirect
     router.push(typeof redirect === 'string' ? redirect : '/')
   } catch (err) {
