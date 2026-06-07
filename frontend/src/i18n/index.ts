@@ -32,6 +32,7 @@ const messages = {
     nav: {
       projects: 'Projects',
       metrics: 'Metrics',
+      privacyRequests: 'Privacy Tickets',
     },
     dashboard: {
       title: '📊 Analytics System',
@@ -230,6 +231,65 @@ const messages = {
       pageViews: 'Page Views',
       visitors: 'Visitors',
     },
+    privacy: {
+      title: 'Privacy Tickets',
+      subtitle: 'Review export/delete requests, update processing status, and notify users',
+      detailTitle: 'Ticket Detail',
+      processTitle: 'Process Ticket',
+      notifyTitle: 'Notify User',
+      filters: {
+        status: 'Status',
+        type: 'Type',
+        processor: 'Processor',
+      },
+      tables: {
+        requestId: 'Request ID',
+        type: 'Type',
+        processor: 'Processor',
+        email: 'Email',
+        requestedAt: 'Requested At',
+        operator: 'Operator',
+      },
+      fields: {
+        source: 'Source',
+        note: 'Requester Note',
+        operatorNote: 'Operator Note',
+        metadata: 'Metadata',
+        resultPayload: 'Result Payload',
+        notificationMessage: 'Notification Message',
+        subject: 'Subject',
+        message: 'Message',
+      },
+      actions: {
+        detail: 'Detail',
+        process: 'Process',
+        notify: 'Notify',
+        notifyUser: 'Notify user',
+        send: 'Send',
+      },
+      status: {
+        SUBMITTED: 'Submitted',
+        IN_PROGRESS: 'In Progress',
+        COMPLETED: 'Completed',
+        REJECTED: 'Rejected',
+        CANCELLED: 'Cancelled',
+      },
+      placeholders: {
+        resultPayload: '{ "ticketNo": "PH-...", "completedAt": "..." }',
+      },
+      messages: {
+        updated: 'Ticket updated',
+        notified: 'Notification sent',
+      },
+      errors: {
+        loadFailed: 'Failed to load tickets',
+        detailFailed: 'Failed to load ticket detail',
+        updateFailed: 'Failed to update ticket',
+        notifyFailed: 'Failed to send notification',
+        notifyRequired: 'Subject and message are required',
+        invalidJson: 'Result payload must be valid JSON',
+      },
+    },
     login: {
       title: 'Admin Login',
       subtitle: 'Enter your access token to continue',
@@ -247,6 +307,7 @@ const messages = {
     nav: {
       projects: '项目管理',
       metrics: '运营数据',
+      privacyRequests: '隐私工单',
     },
     dashboard: {
       title: '📊 运营管理中心',
@@ -444,6 +505,65 @@ const messages = {
     summary: {
       pageViews: '访问次数',
       visitors: '访问人数',
+    },
+    privacy: {
+      title: '隐私工单',
+      subtitle: '查看导出/删除请求，回填处理状态并通知用户',
+      detailTitle: '工单详情',
+      processTitle: '处理工单',
+      notifyTitle: '通知用户',
+      filters: {
+        status: '状态',
+        type: '类型',
+        processor: '处理方',
+      },
+      tables: {
+        requestId: '工单号',
+        type: '类型',
+        processor: '处理方',
+        email: '联系邮箱',
+        requestedAt: '提交时间',
+        operator: '处理人',
+      },
+      fields: {
+        source: '来源',
+        note: '用户备注',
+        operatorNote: '处理备注',
+        metadata: '元数据',
+        resultPayload: '处理结果',
+        notificationMessage: '通知内容',
+        subject: '主题',
+        message: '正文',
+      },
+      actions: {
+        detail: '详情',
+        process: '处理',
+        notify: '通知',
+        notifyUser: '通知用户',
+        send: '发送',
+      },
+      status: {
+        SUBMITTED: '待处理',
+        IN_PROGRESS: '处理中',
+        COMPLETED: '已完成',
+        REJECTED: '已拒绝',
+        CANCELLED: '已取消',
+      },
+      placeholders: {
+        resultPayload: '{ "ticketNo": "PH-...", "completedAt": "..." }',
+      },
+      messages: {
+        updated: '工单已更新',
+        notified: '通知已发送',
+      },
+      errors: {
+        loadFailed: '加载工单失败',
+        detailFailed: '加载工单详情失败',
+        updateFailed: '更新工单失败',
+        notifyFailed: '发送通知失败',
+        notifyRequired: '主题和正文不能为空',
+        invalidJson: '处理结果必须是有效 JSON',
+      },
     },
     login: {
       title: '管理员登录',

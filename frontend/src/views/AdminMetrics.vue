@@ -10,6 +10,20 @@
           
         </div>
         <div class="header-actions">
+          <el-button-group class="nav-group">
+            <el-button :type="isProjectsRoute ? 'primary' : 'default'" @click="goProjects">
+              <el-icon class="el-icon--left"><FolderOpened /></el-icon>
+              {{ t('nav.projects') }}
+            </el-button>
+            <el-button type="primary">
+              <el-icon class="el-icon--left"><TrendCharts /></el-icon>
+              {{ t('nav.metrics') }}
+            </el-button>
+            <el-button :type="isPrivacyRoute ? 'primary' : 'default'" @click="goPrivacyRequests">
+              <el-icon class="el-icon--left"><Tickets /></el-icon>
+              {{ t('nav.privacyRequests') }}
+            </el-button>
+          </el-button-group>
           <div class="custom-segmented-control">
             <div 
               class="segment-item" 
@@ -335,7 +349,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import * as echarts from 'echarts'
 import { useI18n } from '@/i18n'
 import { GridLayout, GridItem } from 'vue3-grid-layout-next'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import { getProjects, type Project } from '@/api/admin'
@@ -394,7 +408,13 @@ interface DashboardItem {
 
 // --- 2. State & Basic Setup ---
 const route = useRoute()
+const router = useRouter()
 const { t, locale } = useI18n()
+
+const isProjectsRoute = computed(() => route.path === '/')
+const isPrivacyRoute = computed(() => route.path === '/privacy-requests')
+const goProjects = () => router.push('/')
+const goPrivacyRequests = () => router.push('/privacy-requests')
 
 const routeProjectId = computed(() => {
   const value = route.query.projectId

@@ -15,6 +15,10 @@
             <el-icon class="el-icon--left"><TrendCharts /></el-icon>
             {{ t('nav.metrics') }}
           </el-button>
+          <el-button :type="isPrivacyRoute ? 'primary' : 'default'" @click="goPrivacyRequests">
+            <el-icon class="el-icon--left"><Tickets /></el-icon>
+            {{ t('nav.privacyRequests') }}
+          </el-button>
         </el-button-group>
         <LanguageToggle />
         <el-button type="primary" size="large" @click="showAddDialog" class="add-btn">
@@ -216,9 +220,11 @@ const route = useRoute()
 
 const isProjectsRoute = computed(() => route.path === '/')
 const isMetricsRoute = computed(() => route.path === '/metrics')
+const isPrivacyRoute = computed(() => route.path === '/privacy-requests')
 
 const goProjects = () => router.push('/')
 const goMetrics = () => router.push('/metrics')
+const goPrivacyRequests = () => router.push('/privacy-requests')
 const { t } = useI18n()
 
 const openProjectMetrics = (project: Project) => {
