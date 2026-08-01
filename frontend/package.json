@@ -11,6 +11,7 @@
     "build": "run-s type-check build-only bundle:check",
     "preview": "vite preview",
     "build-only": "vite build",
+    "mock:preview": "node scripts/mock-server.mjs",
     "bundle:check": "node scripts/verify-bundle.mjs",
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix --cache",
