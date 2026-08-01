@@ -1,51 +1,36 @@
 <template>
   <div class="admin-container">
-    <div class="header-card">
-      <div>
-        <h1 class="header-title">{{ t('semantics.title') }}</h1>
-        <p class="header-subtitle">{{ t('semantics.subtitle') }}</p>
-      </div>
-      <div class="header-actions">
-        <el-button-group>
-          <el-button @click="router.push('/')">
-            <el-icon class="el-icon--left"><FolderOpened /></el-icon>
-            {{ t('nav.projects') }}
-          </el-button>
-          <el-button @click="router.push({ path: '/metrics', query: projectQuery })">
-            <el-icon class="el-icon--left"><TrendCharts /></el-icon>
-            {{ t('nav.metrics') }}
-          </el-button>
-          <el-button type="primary">
-            <el-icon class="el-icon--left"><CollectionTag /></el-icon>
-            {{ t('nav.semantics') }}
-          </el-button>
-          <el-button @click="router.push({ path: '/privacy-requests', query: projectQuery })">
-            <el-icon class="el-icon--left"><Tickets /></el-icon>
-            {{ t('nav.privacyRequests') }}
-          </el-button>
-        </el-button-group>
-        <LanguageToggle />
+    <PageHeader :title="t('semantics.title')" :subtitle="t('semantics.subtitle')">
+      <template #actions>
         <el-button type="primary" :disabled="!projectId" @click="openCreateDialog">
           <el-icon class="el-icon--left"><Plus /></el-icon>
           {{ t('semantics.actions.create') }}
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
+
+    <el-alert
+      class="mapping-guide"
+      type="info"
+      :closable="false"
+      show-icon
+      :title="t('semantics.mappingGuide.title')"
+      :description="t('semantics.mappingGuide.description')"
+    />
 
     <div class="content-card toolbar">
-      <el-select
-        v-model="projectId"
-        filterable
-        :placeholder="t('filters.selectProject')"
-        style="width: 260px"
-        @change="handleProjectChange"
+      <el-input
+        v-model="searchText"
+        clearable
+        :placeholder="t('semantics.searchPlaceholder')"
+        class="dictionary-search"
       >
-        <el-option
-          v-for="project in projects"
-          :key="project.id"
-          :label="project.projectName"
-          :value="project.projectId"
-        />
+        <template #prefix><el-icon><Search /></el-icon></template>
+      </el-input>
+      <el-select v-model="catalogFilter" class="mapping-filter">
+        <el-option :label="t('semantics.filters.all')" value="all" />
+        <el-option :label="t('semantics.filters.unmapped')" value="unmapped" />
+        <el-option :label="t('semantics.filters.mapped')" value="mapped" />
       </el-select>
       <div class="summary-tags">
         <el-tag effect="plain">{{ t('semantics.summary.raw', { count: catalog.length }) }}</el-tag>
@@ -69,7 +54,7 @@
             <p>{{ t('semantics.catalog.help') }}</p>
           </div>
         </div>
-        <el-table :data="catalog" size="small" height="620">
+        <el-table :data="filteredCatalog" size="small" height="620">
           <el-table-column prop="rawKey" :label="t('semantics.fields.rawKey')" min-width="170" show-overflow-tooltip />
           <el-table-column :label="t('semantics.fields.meaning')" min-width="170">
             <template #default="{ row }">
@@ -101,7 +86,7 @@
             <p>{{ t('semantics.definitions.help') }}</p>
           </div>
         </div>
-        <el-table :data="definitions" size="small" height="620">
+        <el-table :data="filteredDefinitions" size="small" height="620">
           <el-table-column :label="t('semantics.fields.meaning')" min-width="180">
             <template #default="{ row }">
               <div class="primary-cell">{{ localizedName(row.displayName) }}</div>
@@ -143,6 +128,43 @@
         </el-table>
       </div>
     </div>
+
+    <el-dialog
+      v-model="mappingVisible"
+      :title="t('semantics.mappingDialog.title')"
+      width="560px"
+    >
+      <el-alert
+        type="info"
+        :closable="false"
+        :title="t('semantics.mappingDialog.rawKey', { key: pendingRawKey })"
+      />
+      <el-form label-position="top" class="mapping-form">
+        <el-form-item :label="t('semantics.mappingDialog.existingMeaning')" required>
+          <el-select
+            v-model="targetSemanticKey"
+            filterable
+            style="width: 100%"
+            :placeholder="t('semantics.mappingDialog.selectMeaning')"
+          >
+            <el-option
+            v-for="definition in activeDefinitions"
+              :key="definition.semanticKey"
+              :label="`${localizedName(definition.displayName)} · ${definition.semanticKey}`"
+              :value="definition.semanticKey"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createMeaningFromPendingRaw">
+          {{ t('semantics.mappingDialog.createNew') }}
+        </el-button>
+        <el-button type="primary" :loading="saving" :disabled="!targetSemanticKey" @click="mapToExistingMeaning">
+          {{ t('semantics.mappingDialog.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog
       v-model="dialogVisible"
@@ -192,14 +214,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import LanguageToggle from '@/components/LanguageToggle.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import { useI18n } from '@/i18n'
+import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
-import { resolveProjectSelection } from '@/utils/projectSelection'
-import { getProjects, type Project } from '@/api/admin'
 import {
   deleteSemanticDefinition,
   getEventCatalog,
@@ -209,17 +230,21 @@ import {
   type SemanticDefinition,
 } from '@/api/semantic'
 
-const route = useRoute()
-const router = useRouter()
 const { t, locale } = useI18n()
-const projects = ref<Project[]>([])
+const projectContext = useProjectContextStore()
+const { selectedProjectId } = storeToRefs(projectContext)
 const projectId = ref('')
 const catalog = ref<EventCatalogEntry[]>([])
 const definitions = ref<SemanticDefinition[]>([])
+const searchText = ref('')
+const catalogFilter = ref<'all' | 'mapped' | 'unmapped'>('all')
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
+const mappingVisible = ref(false)
 const editingKey = ref('')
+const pendingRawKey = ref('')
+const targetSemanticKey = ref('')
 let refreshGeneration = 0
 
 const form = reactive({
@@ -233,7 +258,20 @@ const form = reactive({
 })
 
 const mappedCount = computed(() => catalog.value.filter((item) => item.mapped).length)
-const projectQuery = computed(() => (projectId.value ? { projectId: projectId.value } : {}))
+const activeDefinitions = computed(() => definitions.value.filter((item) => item.isActive))
+const normalizedSearch = computed(() => searchText.value.trim().toLowerCase())
+const filteredCatalog = computed(() => catalog.value.filter((item) => {
+  if (catalogFilter.value === 'mapped' && !item.mapped) return false
+  if (catalogFilter.value === 'unmapped' && item.mapped) return false
+  if (!normalizedSearch.value) return true
+  return [item.rawKey, item.semanticKey, localizedName(item.displayName), item.category]
+    .some((value) => value?.toLowerCase().includes(normalizedSearch.value))
+}))
+const filteredDefinitions = computed(() => definitions.value.filter((item) => {
+  if (!normalizedSearch.value) return true
+  return [item.semanticKey, localizedName(item.displayName), item.category, ...item.aliases]
+    .some((value) => value?.toLowerCase().includes(normalizedSearch.value))
+}))
 
 const localizedName = (names: Record<string, string> | null) => {
   if (!names) return '-'
@@ -278,7 +316,6 @@ const handleProjectChange = async () => {
   catalog.value = []
   definitions.value = []
   loading.value = false
-  await router.replace({ path: '/semantics', query: projectQuery.value })
   await refreshAll()
 }
 
@@ -325,10 +362,50 @@ const openFromRaw = (rawKey: string) => {
     openEditDialog(existing)
     return
   }
+  if (activeDefinitions.value.length > 0) {
+    pendingRawKey.value = rawKey
+    targetSemanticKey.value = ''
+    mappingVisible.value = true
+    return
+  }
+  openCreateFromRaw(rawKey)
+}
+
+const openCreateFromRaw = (rawKey: string) => {
   resetForm()
   form.semanticKey = suggestedSemanticKey(rawKey)
   form.aliasesText = rawKey
   dialogVisible.value = true
+}
+
+const createMeaningFromPendingRaw = () => {
+  const rawKey = pendingRawKey.value
+  mappingVisible.value = false
+  openCreateFromRaw(rawKey)
+}
+
+const mapToExistingMeaning = async () => {
+  const definition = definitions.value.find((item) => item.semanticKey === targetSemanticKey.value)
+  if (!definition || !pendingRawKey.value) return
+  saving.value = true
+  try {
+    await upsertSemanticDefinition(projectId.value, definition.semanticKey, {
+      sourceKind: definition.sourceKind,
+      displayName: definition.displayName,
+      category: definition.category || undefined,
+      description: definition.description || undefined,
+      isActive: definition.isActive,
+      aliasMode: 'REPLACE',
+      aliases: Array.from(new Set([...definition.aliases, pendingRawKey.value])),
+    })
+    ElMessage.success(t('semantics.messages.saved'))
+    mappingVisible.value = false
+    await refreshAll()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('semantics.errors.saveFailed')))
+  } finally {
+    saving.value = false
+  }
 }
 
 const parseAliases = () => Array.from(new Set(
@@ -385,17 +462,16 @@ const removeDefinition = async (definition: SemanticDefinition) => {
   }
 }
 
+watch(selectedProjectId, async (nextProjectId) => {
+  if (!nextProjectId || nextProjectId === projectId.value) return
+  projectId.value = nextProjectId
+  await handleProjectChange()
+})
+
 onMounted(async () => {
   try {
-    const response = await getProjects()
-    const routeProject = typeof route.query.projectId === 'string' ? route.query.projectId : ''
-    const selection = resolveProjectSelection(
-      response.data.data,
-      routeProject,
-      import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
-    )
-    projects.value = selection.activeProjects
-    projectId.value = selection.selectedProjectId
+    await projectContext.ensureLoaded()
+    projectId.value = selectedProjectId.value
     await refreshAll()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
@@ -404,13 +480,15 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.admin-container { max-width: 1600px; margin: 0 auto; padding: 32px 20px; color: #1d1d1f; }
-.header-card, .content-card { background: rgba(255, 255, 255, 0.88); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 18px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.04); }
-.header-card { padding: 28px 32px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; gap: 24px; }
-.header-title { margin: 0; font-size: 32px; }
-.header-subtitle, .section-header p { margin: 8px 0 0; color: #86868b; font-size: 14px; }
-.header-actions, .toolbar, .summary-tags { display: flex; align-items: center; gap: 12px; }
+.admin-container { max-width: 1600px; margin: 0 auto; color: #1d1d1f; }
+.content-card { background: rgba(255, 255, 255, 0.88); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 18px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.04); }
+.section-header p { margin: 8px 0 0; color: #86868b; font-size: 14px; }
+.toolbar, .summary-tags { display: flex; align-items: center; gap: 12px; }
+.mapping-guide { margin-bottom: 18px; }
+.mapping-form { margin-top: 18px; }
 .toolbar { padding: 16px 20px; margin-bottom: 20px; }
+.dictionary-search { width: min(360px, 35vw); }
+.mapping-filter { width: 150px; }
 .summary-tags { flex: 1; }
 .two-column-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 20px; }
 .content-card { padding: 20px; min-width: 0; }
@@ -420,8 +498,8 @@ onMounted(async () => {
 code { color: #5f6368; font-size: 12px; }
 .alias-list { display: flex; gap: 5px; flex-wrap: wrap; }
 @media (max-width: 1100px) {
-  .header-card { align-items: flex-start; flex-direction: column; }
-  .header-actions { flex-wrap: wrap; }
   .two-column-grid { grid-template-columns: 1fr; }
+  .toolbar { align-items: flex-start; flex-wrap: wrap; }
+  .dictionary-search { width: 100%; }
 }
 </style>

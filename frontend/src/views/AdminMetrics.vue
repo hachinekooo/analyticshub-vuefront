@@ -1,173 +1,43 @@
 <template>
   <div class="admin-container">
-    <div class="header-card">
-      <div class="header-main">
-        <div class="header-main-left">
-          <div>
-            <h1 class="header-title">{{ t('metrics.title') }}</h1>
-            <p class="header-subtitle">{{ t('metrics.subtitle') }}</p>
-          </div>
-          
-        </div>
-        <div class="header-actions header-navigation">
-          <el-button-group class="nav-group">
-            <el-button :type="isProjectsRoute ? 'primary' : 'default'" @click="goProjects">
-              <el-icon class="el-icon--left"><FolderOpened /></el-icon>
-              {{ t('nav.projects') }}
-            </el-button>
-            <el-button type="primary">
-              <el-icon class="el-icon--left"><TrendCharts /></el-icon>
-              {{ t('nav.metrics') }}
-            </el-button>
-            <el-button :type="isSemanticRoute ? 'primary' : 'default'" @click="goSemantics">
-              <el-icon class="el-icon--left"><CollectionTag /></el-icon>
-              {{ t('nav.semantics') }}
-            </el-button>
-            <el-button :type="isPrivacyRoute ? 'primary' : 'default'" @click="goPrivacyRequests">
-              <el-icon class="el-icon--left"><Tickets /></el-icon>
-              {{ t('nav.privacyRequests') }}
-            </el-button>
-          </el-button-group>
-          <LanguageToggle />
-        </div>
-      </div>
+    <PageHeader :title="t('metrics.title')" :subtitle="t('metrics.subtitle')">
+      <template #actions>
+        <el-button plain @click="goSemantics">
+          <el-icon class="el-icon--left"><CollectionTag /></el-icon>
+          {{ t('metrics.openDictionary') }}
+        </el-button>
+      </template>
+    </PageHeader>
 
-      <div class="workspace-toolbar">
-        <div class="workspace-switcher">
-          <span class="toolbar-label">{{ t('metrics.workspace') }}</span>
-          <div class="custom-segmented-control">
-            <button
-              type="button"
-              class="segment-item" 
-              :class="{ 'is-active': activeSpace === 'operations' }"
-              :aria-pressed="activeSpace === 'operations'"
-              @click="activeSpace = 'operations'"
-            >
-              {{ t('metrics.spaces.operations') }}
-            </button>
-            <button
-              type="button"
-              class="segment-item" 
-              :class="{ 'is-active': activeSpace === 'technical' }"
-              :aria-pressed="activeSpace === 'technical'"
-              @click="activeSpace = 'technical'"
-            >
-              {{ t('metrics.spaces.technical') }}
-            </button>
-          </div>
-        </div>
-        <div class="workspace-actions">
-          <el-button type="primary" :loading="refreshing" @click="applyFilters">
-            <el-icon class="el-icon--left"><Refresh /></el-icon>
-            {{ t('buttons.applyFilters') }}
-          </el-button>
-          <el-button @click="isLayoutEditable = !isLayoutEditable" :type="isLayoutEditable ? 'warning' : 'default'">
-            <el-icon class="el-icon--left"><Setting /></el-icon>
-            {{ isLayoutEditable ? t('buttons.finishEditing') : t('buttons.editLayout') }}
-          </el-button>
-          <el-button v-if="isLayoutEditable" @click="resetToDefaultLayout" plain>
-            <el-icon class="el-icon--left"><Brush /></el-icon>
-            {{ t('metrics.resetLayout') }}
-          </el-button>
-          <el-button v-if="isLayoutEditable" type="success" :loading="dashboardSaving" @click="saveServerDashboard">
-            <el-icon class="el-icon--left"><Finished /></el-icon>
-            {{ t('metrics.saveDashboard') }}
-          </el-button>
-        </div>
-      </div>
+    <MetricsControlBar
+      :space="activeSpace"
+      :date-range="filters.dateRange"
+      :granularity="filters.granularity"
+      :platform="filters.platform"
+      :user-id="filters.userId"
+      :device-id="filters.deviceId"
+      :refreshing="refreshing"
+      @update:space="activeSpace = $event"
+      @update:date-range="filters.dateRange = $event"
+      @update:granularity="filters.granularity = $event"
+      @update:user-id="filters.userId = $event"
+      @update:device-id="filters.deviceId = $event"
+      @select-platform="selectPlatform"
+      @apply="applyFilters"
+      @customize="isLayoutEditable = true"
+    />
 
-      <div class="filter-panel">
-        <div class="filter-panel-title">{{ t('metrics.commonFilters') }}</div>
-        <el-form :model="filters" inline class="compact-form" label-position="top">
-          <el-form-item :label="t('filters.project')">
-            <el-select v-model="filters.projectId" :placeholder="t('filters.selectProject')" filterable style="width: 220px">
-              <el-option
-                v-for="project in projects"
-                :key="project.id"
-                :label="`${project.projectName} · ${project.projectId}`"
-                :value="project.projectId"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item :label="t('filters.dateRange')">
-            <el-date-picker
-              v-model="filters.dateRange"
-              type="daterange"
-              unlink-panels
-              format="YYYY-MM-DD"
-              value-format="YYYY-MM-DD"
-              :start-placeholder="t('filters.startDate')"
-              :end-placeholder="t('filters.endDate')"
-              :range-separator="t('filters.rangeSeparator')"
-              clearable
-              style="width: 280px"
-            />
-          </el-form-item>
-          <el-form-item v-if="activeSpace === 'operations'" :label="t('filters.granularity')">
-            <el-select v-model="filters.granularity" style="width: 120px">
-              <el-option :label="t('filters.hourly')" value="hour" />
-              <el-option :label="t('filters.daily')" value="day" />
-            </el-select>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <div v-if="activeSpace === 'technical'" class="filter-panel detail-filter-panel">
-        <div class="filter-panel-title">{{ t('metrics.detailFilters') }}</div>
-        <el-form :model="filters" inline class="compact-form" label-position="top">
-          <el-form-item :label="t('filters.platform')">
-            <div class="custom-segmented-control platform-segmented-control">
-              <button
-                type="button"
-                class="segment-item"
-                :class="{ 'is-active': filters.platform === 'web' }"
-                :aria-pressed="filters.platform === 'web'"
-                @click="selectPlatform('web')"
-              >
-                {{ t('filters.platformWeb') }}
-              </button>
-              <button
-                type="button"
-                class="segment-item"
-                :class="{ 'is-active': filters.platform === 'app' }"
-                :aria-pressed="filters.platform === 'app'"
-                @click="selectPlatform('app')"
-              >
-                {{ t('filters.platformApp') }}
-              </button>
-            </div>
-          </el-form-item>
-          <el-form-item :label="t('filters.userId')">
-            <el-input v-model="filters.userId" :placeholder="t('filters.placeholders.userId')" clearable style="width: 180px" />
-          </el-form-item>
-          <el-form-item :label="t('filters.deviceId')">
-            <el-input v-model="filters.deviceId" :placeholder="t('filters.placeholders.deviceId')" clearable style="width: 180px" />
-          </el-form-item>
-        </el-form>
-        <p class="filter-help">{{ t('metrics.detailFilterHelp') }}</p>
-      </div>
-
-      <div v-if="isLayoutEditable" class="widget-palette">
-        <span>{{ t('metrics.layoutEditingHint') }}</span>
-        <el-dropdown :disabled="availableWidgetTypes.length === 0" @command="addWidgetType">
-          <el-button type="primary" plain>
-            <el-icon class="el-icon--left"><Plus /></el-icon>
-            {{ t('metrics.addWidget') }}
-          </el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="widget in availableWidgetTypes"
-                :key="widget.type"
-                :command="widget.type"
-              >
-                {{ widget.label }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
-    </div>
+    <DashboardEditorPanel
+      :visible="isLayoutEditable"
+      :current-widgets="currentWidgetOptions"
+      :available-widgets="availableWidgetTypes"
+      :custom-widget-count="registeredCustomWidgetCount"
+      :saving="dashboardSaving"
+      @add="addWidgetType"
+      @reset="resetToDefaultLayout"
+      @save="saveServerDashboard"
+      @finish="isLayoutEditable = false"
+    />
 
       <div class="workspace-area">
         <grid-layout
@@ -486,7 +356,7 @@
               <el-option
                 v-for="eventType in dashboardEventTypeOptions"
                 :key="eventType"
-                :label="eventType"
+                :label="eventOptionLabel(eventType)"
                 :value="eventType"
               />
             </el-select>
@@ -514,7 +384,7 @@
               <el-option
                 v-for="eventType in dashboardEventTypeOptions"
                 :key="eventType"
-                :label="eventType"
+                :label="eventOptionLabel(eventType)"
                 :value="eventType"
               />
             </el-select>
@@ -531,7 +401,7 @@
               <el-option
                 v-for="eventType in dashboardEventTypeOptions"
                 :key="eventType"
-                :label="eventType"
+                :label="eventOptionLabel(eventType)"
                 :value="eventType"
               />
             </el-select>
@@ -561,13 +431,16 @@ import { init, use, type ECharts } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useI18n } from '@/i18n'
 import { GridLayout, GridItem } from 'vue3-grid-layout-next'
+import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import LanguageToggle from '@/components/LanguageToggle.vue'
+import PageHeader from '@/components/PageHeader.vue'
+import MetricsControlBar from '@/components/metrics/MetricsControlBar.vue'
+import DashboardEditorPanel from '@/components/metrics/DashboardEditorPanel.vue'
 import CounterWidget from '@/features/counters/CounterWidget.vue'
+import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
 import { trafficMetricTypeForPlatform, type TrafficPlatform } from '@/utils/metricsFilters'
-import { resolveProjectSelection } from '@/utils/projectSelection'
 import {
   getDashboardWidgetExtension,
   getDashboardWidgetExtensions,
@@ -575,7 +448,6 @@ import {
   type DashboardExtensionConfig,
   type DashboardWidgetExtension,
 } from '@/extensions/dashboard'
-import { getProjects, type Project } from '@/api/admin'
 import { getEventCatalog, type EventCatalogEntry } from '@/api/semantic'
 import {
   getProjectDashboards,
@@ -585,9 +457,6 @@ import {
   type DashboardWidgetDefinition,
 } from '@/api/dashboard'
 import {
-  Brush,
-  Refresh,
-  Setting,
   Close,
   Rank,
 } from '@element-plus/icons-vue'
@@ -656,20 +525,15 @@ type ConfigurableAnalyticsWidgetType = 'core.productFunnel' | 'core.retention'
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
-
-const isProjectsRoute = computed(() => route.path === '/')
-const isSemanticRoute = computed(() => route.path === '/semantics')
-const isPrivacyRoute = computed(() => route.path === '/privacy-requests')
-const goProjects = () => router.push('/')
 const goSemantics = () => router.push({ path: '/semantics', query: filters.projectId ? { projectId: filters.projectId } : {} })
-const goPrivacyRequests = () => router.push({ path: '/privacy-requests', query: filters.projectId ? { projectId: filters.projectId } : {} })
+const projectContext = useProjectContextStore()
+const { activeProjects: projects, selectedProjectId } = storeToRefs(projectContext)
 
 const routeProjectId = computed(() => {
   const value = route.query.projectId
   return typeof value === 'string' ? value : ''
 })
 
-const projects = ref<Project[]>([])
 const refreshing = ref(false)
 const isLayoutEditable = ref(false)
 const activeSpace = ref<DashboardSpace>('operations')
@@ -851,6 +715,10 @@ const eventDisplayName = (rawKey: string) => {
   }
   return Object.values(names)[0] || rawKey
 }
+const eventOptionLabel = (rawKey: string) => {
+  const displayName = eventDisplayName(rawKey)
+  return displayName === rawKey ? rawKey : `${displayName} · ${rawKey}`
+}
 
 const requireProject = () => {
   if (!filters.projectId) {
@@ -943,6 +811,13 @@ const availableWidgetTypes = computed(() => {
     }))
   return [...coreWidgets, ...extensionWidgets]
 })
+const currentWidgetOptions = computed(() => dashboardLayout.value.map((item) => ({
+  type: resolvedWidgetType(item) || item.i,
+  label: getWidgetLabel(item),
+})))
+const registeredCustomWidgetCount = computed(() =>
+  getDashboardWidgetExtensions(activeSpace.value).length,
+)
 
 const appendExtensionWidget = (type: string) => {
   const extension = getDashboardWidgetExtension(type)
@@ -1965,21 +1840,6 @@ const updateTrafficTrendsChart = () => {
 
 
 
-const loadProjects = async () => {
-  try {
-    const res = await getProjects()
-    const selection = resolveProjectSelection(
-      res.data.data,
-      routeProjectId.value,
-      import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
-    )
-    projects.value = selection.activeProjects
-    filters.projectId = selection.selectedProjectId
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
-  }
-}
-
 const layoutVisible = ref(false)
 
 const clearLoadingStates = () => {
@@ -2092,8 +1952,15 @@ watch(activeSpace, () => {
 
 watch(() => filters.projectId, () => {
   if (bootstrapping) return
+  projectContext.selectProject(filters.projectId)
   resetProjectDetailFilters()
   void activateWorkspace(true)
+})
+
+watch(selectedProjectId, (projectId) => {
+  if (!bootstrapping && projectId && projectId !== filters.projectId) {
+    filters.projectId = projectId
+  }
 })
 
 watch(routeProjectId, (projectId) => {
@@ -2116,7 +1983,12 @@ watch(isLayoutEditable, (val) => {
 
 onMounted(async () => {
   window.addEventListener('resize', handleResize)
-  await loadProjects()
+  try {
+    await projectContext.ensureLoaded(routeProjectId.value)
+    filters.projectId = selectedProjectId.value
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
+  }
   // Let the project watcher consume the bootstrapping change before enabling it.
   // This keeps the initial page load to one workspace activation and one request batch.
   await nextTick()
@@ -2134,90 +2006,7 @@ onUnmounted(() => {
 .admin-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 40px 20px;
   color: #1d1d1f;
-}
-
-.header-card {
-  background: white;
-  border-radius: 18px;
-  padding: 24px;
-  margin-bottom: 24px;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.02);
-}
-
-.header-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.workspace-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #f5f5f7;
-}
-
-.workspace-switcher,
-.workspace-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.toolbar-label,
-.filter-panel-title {
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.filter-panel {
-  margin-top: 16px;
-  padding: 14px 16px;
-  background: var(--el-fill-color-lighter);
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 12px;
-}
-
-.filter-panel-title {
-  margin-bottom: 10px;
-  color: var(--el-text-color-primary);
-}
-
-.detail-filter-panel {
-  background: var(--el-color-primary-light-9);
-}
-
-.filter-help {
-  margin: 2px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.compact-form {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.compact-form :deep(.el-form-item) {
-  margin-bottom: 0;
-  margin-right: 0;
-}
-
-.compact-form :deep(.el-form-item__label) {
-  height: auto;
-  padding-bottom: 6px;
-  line-height: 1.2;
 }
 
 .workspace-area {
@@ -2328,19 +2117,6 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-.widget-palette {
-  margin: -4px 0 12px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
-  border: 1px dashed var(--el-border-color);
-  border-radius: 8px;
-}
-
 /* Scrollbar for widgets */
 .widget-inner::-webkit-scrollbar {
   width: 4px;
@@ -2362,147 +2138,6 @@ onUnmounted(() => {
   margin-top: 10px;
   display: flex;
   justify-content: center;
-}
-
-.trend-svg {
-  width: 100%;
-  height: 100px;
-  background: #f5f5f7;
-  border-radius: 12px;
-  margin-top: 10px;
-}
-
-.trend-line {
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.trend-line.events {
-  stroke: #0071e3;
-}
-
-.trend-line.sessions {
-  stroke: #ff9500;
-}
-
-.chart-legend {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  font-size: 12px;
-  margin-bottom: 8px;
-}
-
-.legend-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 4px;
-}
-
-.legend-dot.events {
-  background-color: #0071e3;
-}
-
-.legend-dot.sessions {
-  background-color: #ff9500;
-}
-
-.header-main-left {
-  flex: 1;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.custom-segmented-control {
-  display: flex;
-  background: #f1f1f1;
-  padding: 3px;
-  border-radius: 10px;
-  user-select: none;
-}
-
-.segment-item {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  padding: 6px 16px;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  color: #636366;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  text-align: center;
-  min-width: 80px;
-}
-
-.segment-item:hover:not(.is-active) {
-  color: #1d1d1f;
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.segment-item.is-active {
-  background: #ffffff;
-  color: #0071e3;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-
-.platform-segmented-control .segment-item {
-  min-width: 88px;
-}
-
-@media (max-width: 1180px) {
-  .header-main {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
-  }
-
-  .header-navigation,
-  .workspace-toolbar {
-    width: 100%;
-  }
-
-  .workspace-toolbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 720px) {
-  .admin-container {
-    padding: 20px 12px;
-  }
-
-  .header-card {
-    padding: 18px;
-  }
-
-  .nav-group {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  .compact-form,
-  .compact-form :deep(.el-form-item),
-  .compact-form :deep(.el-form-item__content) {
-    width: 100%;
-  }
-
-  .compact-form :deep(.el-select),
-  .compact-form :deep(.el-date-editor),
-  .compact-form :deep(.el-input) {
-    width: 100% !important;
-  }
 }
 
 /* Overview Widget Styling */

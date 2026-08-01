@@ -1,5 +1,8 @@
 import type { Component } from 'vue'
 import type { Locale } from '@/i18n'
+import { dashboardWidgetExtensions } from './dashboardRegistry'
+
+export { dashboardWidgetExtensions } from './dashboardRegistry'
 
 export type DashboardExtensionSpace = 'operations' | 'technical'
 export type DashboardExtensionJsonValue =
@@ -67,23 +70,6 @@ export interface DashboardWidgetExtension<
 export const defineDashboardWidgetExtension = <TConfig extends DashboardExtensionConfig>(
   extension: DashboardWidgetExtension<TConfig>,
 ) => extension
-
-/*
- * Private downstream example (keep the actual component outside this repo):
- *
- * import ProjectScoreWidget from '@/private/ProjectScoreWidget.vue'
- *
- * defineDashboardWidgetExtension({
- *   type: 'custom.example.projectScore',
- *   displayName: { 'zh-CN': '项目评分', en: 'Project score' },
- *   spaces: ['operations'],
- *   component: ProjectScoreWidget,
- *   defaultLayout: { w: 6, h: 8, minW: 4, minH: 4 },
- *   defaultConfig: { threshold: 80 },
- *   configRequired: true,
- * })
- */
-export const dashboardWidgetExtensions: readonly DashboardWidgetExtension[] = Object.freeze([])
 
 const extensionTypePattern = /^custom\.[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*$/
 const localePattern = /^(?:default|[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*)$/

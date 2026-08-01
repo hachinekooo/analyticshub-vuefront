@@ -1,84 +1,64 @@
 <template>
   <div class="admin-container">
-    <div class="header-card">
-      <div>
-        <h1 class="header-title">{{ t('privacy.title') }}</h1>
-        <p class="header-subtitle">{{ t('privacy.subtitle') }}</p>
-      </div>
-      <div class="header-actions">
-        <el-button-group class="nav-group">
-          <el-button :type="isProjectsRoute ? 'primary' : 'default'" @click="goProjects">
-            <el-icon class="el-icon--left"><FolderOpened /></el-icon>
-            {{ t('nav.projects') }}
-          </el-button>
-          <el-button :type="isMetricsRoute ? 'primary' : 'default'" @click="goMetrics">
-            <el-icon class="el-icon--left"><TrendCharts /></el-icon>
-            {{ t('nav.metrics') }}
-          </el-button>
-          <el-button :type="isSemanticRoute ? 'primary' : 'default'" @click="goSemantics">
-            <el-icon class="el-icon--left"><CollectionTag /></el-icon>
-            {{ t('nav.semantics') }}
-          </el-button>
-          <el-button type="primary">
-            <el-icon class="el-icon--left"><Tickets /></el-icon>
-            {{ t('nav.privacyRequests') }}
-          </el-button>
-        </el-button-group>
-        <LanguageToggle />
+    <PageHeader :title="t('privacy.title')" :subtitle="t('privacy.subtitle')">
+      <template #actions>
         <el-tooltip :content="t('buttons.refresh')" placement="top">
           <el-button :aria-label="t('buttons.refresh')" type="primary" :loading="loading" circle plain @click="loadRequests">
             <el-icon><Refresh /></el-icon>
           </el-button>
         </el-tooltip>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <div class="content-card">
       <div class="filter-bar">
-        <el-form :model="filters" inline class="filter-form">
-          <el-select
-            v-model="filters.projectId"
-            :placeholder="t('filters.selectProject')"
-            filterable
-            style="width: 180px"
-            @change="handleProjectChange"
-          >
-            <el-option
-              v-for="project in projects"
-              :key="project.id"
-              :label="project.projectName"
-              :value="project.projectId"
+        <el-form :model="filters" inline label-position="top" class="filter-form">
+          <el-form-item :label="t('filters.dateRange')">
+            <el-date-picker
+              v-model="filters.dateRange"
+              type="daterange"
+              unlink-panels
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              :start-placeholder="t('filters.startDate')"
+              :end-placeholder="t('filters.endDate')"
+              :range-separator="t('filters.rangeSeparator')"
+              style="width: 270px"
             />
-          </el-select>
-          <el-date-picker
-            v-model="filters.dateRange"
-            type="daterange"
-            unlink-panels
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            style="width: 240px"
-          />
-          <el-select v-model="filters.status" clearable :placeholder="t('privacy.filters.status')" style="width: 150px">
-            <el-option v-for="status in privacyStatuses" :key="status" :label="statusLabel(status)" :value="status" />
-          </el-select>
-          <el-switch
-            v-model="filters.openOnly"
-            :disabled="Boolean(filters.status)"
-            :active-text="t('privacy.filters.openOnly')"
-          />
-          <el-select v-model="filters.requestType" clearable :placeholder="t('privacy.filters.type')" style="width: 130px">
-            <el-option label="EXPORT" value="EXPORT" />
-            <el-option label="DELETE" value="DELETE" />
-          </el-select>
-          <el-select v-model="filters.processor" clearable :placeholder="t('privacy.filters.processor')" style="width: 150px">
-            <el-option label="ANALYTICSHUB" value="ANALYTICSHUB" />
-            <el-option label="POSTHOG" value="POSTHOG" />
-          </el-select>
-          <el-input v-model="filters.userId" clearable :placeholder="t('filters.userId')" style="width: 180px" />
-          <el-button type="primary" :loading="loading" @click="applyFilters">
-            <el-icon class="el-icon--left"><Search /></el-icon>
-            {{ t('buttons.refresh') }}
-          </el-button>
+          </el-form-item>
+          <el-form-item :label="t('privacy.filters.status')">
+            <el-select v-model="filters.status" clearable :placeholder="t('privacy.filters.status')" style="width: 150px">
+              <el-option v-for="status in privacyStatuses" :key="status" :label="statusLabel(status)" :value="status" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('privacy.filters.type')">
+            <el-select v-model="filters.requestType" clearable :placeholder="t('privacy.filters.type')" style="width: 130px">
+              <el-option label="EXPORT" value="EXPORT" />
+              <el-option label="DELETE" value="DELETE" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('privacy.filters.processor')">
+            <el-select v-model="filters.processor" clearable :placeholder="t('privacy.filters.processor')" style="width: 150px">
+              <el-option label="ANALYTICSHUB" value="ANALYTICSHUB" />
+              <el-option label="POSTHOG" value="POSTHOG" />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('filters.userId')">
+            <el-input v-model="filters.userId" clearable :placeholder="t('filters.userId')" style="width: 180px" />
+          </el-form-item>
+          <el-form-item :label="t('privacy.filters.queue')">
+            <el-switch
+              v-model="filters.openOnly"
+              :disabled="Boolean(filters.status)"
+              :active-text="t('privacy.filters.openOnly')"
+            />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" :loading="loading" @click="applyFilters">
+              <el-icon class="el-icon--left"><Search /></el-icon>
+              {{ t('buttons.applyFilters') }}
+            </el-button>
+          </el-form-item>
         </el-form>
       </div>
 
@@ -293,14 +273,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
-import LanguageToggle from '@/components/LanguageToggle.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import { useI18n } from '@/i18n'
+import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
-import { resolveProjectSelection } from '@/utils/projectSelection'
-import { getProjects, type Project } from '@/api/admin'
 import {
   getPrivacyRequestDetail,
   getPrivacyRequestActivities,
@@ -318,20 +297,11 @@ import {
   type WorkOrderActivity,
 } from '@/api/privacy'
 
-const router = useRouter()
-const route = useRoute()
 const { t } = useI18n()
-
-const isProjectsRoute = computed(() => route.path === '/')
-const isMetricsRoute = computed(() => route.path === '/metrics')
-const isSemanticRoute = computed(() => route.path === '/semantics')
-
-const goProjects = () => router.push('/')
-const goMetrics = () => router.push({ path: '/metrics', query: filters.projectId ? { projectId: filters.projectId } : {} })
-const goSemantics = () => router.push({ path: '/semantics', query: filters.projectId ? { projectId: filters.projectId } : {} })
+const projectContext = useProjectContextStore()
+const { selectedProjectId: contextProjectId } = storeToRefs(projectContext)
 
 const privacyStatuses: PrivacyRequestStatus[] = ['SUBMITTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED']
-const projects = ref<Project[]>([])
 const loading = ref(false)
 const updating = ref(false)
 const notifying = ref(false)
@@ -436,22 +406,6 @@ const rangeParams = () => {
   return {}
 }
 
-const loadProjects = async () => {
-  try {
-    const res = await getProjects()
-    const routeProjectId = typeof route.query.projectId === 'string' ? route.query.projectId : ''
-    const selection = resolveProjectSelection(
-      res.data.data,
-      routeProjectId,
-      import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
-    )
-    projects.value = selection.activeProjects
-    filters.projectId = selection.selectedProjectId
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
-  }
-}
-
 const clearRequestContext = () => {
   Object.assign(requests, {
     projectId: filters.projectId,
@@ -481,10 +435,7 @@ const handleProjectChange = async () => {
   requestGeneration += 1
   filters.page = 1
   clearRequestContext()
-  if (filters.projectId) {
-    await router.replace({ path: '/privacy-requests', query: { projectId: filters.projectId } })
-    await loadRequests()
-  }
+  if (filters.projectId) await loadRequests()
 }
 
 const loadRequests = async () => {
@@ -747,10 +698,19 @@ const formatJsonBlock = (value: unknown) => {
   }
 }
 
+watch(contextProjectId, async (projectId) => {
+  if (!projectId || projectId === filters.projectId) return
+  filters.projectId = projectId
+  await handleProjectChange()
+})
+
 onMounted(async () => {
-  await loadProjects()
-  if (filters.projectId) {
-    loadRequests()
+  try {
+    await projectContext.ensureLoaded()
+    filters.projectId = contextProjectId.value
+    if (filters.projectId) loadRequests()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   }
 })
 </script>
@@ -759,42 +719,7 @@ onMounted(async () => {
 .admin-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 40px 20px;
   color: #1d1d1f;
-}
-
-.header-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 18px;
-  padding: 32px;
-  margin-bottom: 32px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  gap: 24px;
-}
-
-.header-title {
-  font-size: 34px;
-  font-weight: 700;
-  color: #1d1d1f;
-  letter-spacing: -0.02em;
-}
-
-.header-subtitle {
-  color: #86868b;
-  font-size: 14px;
-  margin: 6px 0 0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
 }
 
 .content-card {
@@ -810,10 +735,12 @@ onMounted(async () => {
 
 .filter-form {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-end;
+  gap: 12px;
   flex-wrap: wrap;
 }
+.filter-form :deep(.el-form-item) { margin: 0; }
+.filter-form :deep(.el-form-item__label) { height: auto; padding-bottom: 6px; line-height: 1.2; }
 
 .request-table {
   width: 100%;
@@ -854,10 +781,9 @@ onMounted(async () => {
   margin-bottom: 18px;
 }
 
-@media (max-width: 1280px) {
-  .header-card {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+@media (max-width: 760px) {
+  .filter-form,
+  .filter-form :deep(.el-form-item),
+  .filter-form :deep(.el-form-item__content) { width: 100%; }
 }
 </style>
