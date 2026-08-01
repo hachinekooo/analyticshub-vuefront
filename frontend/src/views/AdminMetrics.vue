@@ -529,6 +529,7 @@ import { ElMessage } from 'element-plus'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import CounterWidget from '@/features/counters/CounterWidget.vue'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import { resolveProjectSelection } from '@/utils/projectSelection'
 import {
   getDashboardWidgetExtension,
   getDashboardWidgetExtensions,
@@ -642,7 +643,7 @@ const dashboardSaving = ref(false)
 
 // Filters & Params
 const filters = reactive({
-  projectId: import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
+  projectId: '',
   dateRange: null as string[] | null,
   granularity: 'day' as MetricsGranularity,
   topEventsLimit: 10,
@@ -1923,12 +1924,13 @@ const updateTrafficTrendsChart = () => {
 const loadProjects = async () => {
   try {
     const res = await getProjects()
-    projects.value = res.data.data
-    const firstProject = projects.value[0]
-    const preferredProjectId = routeProjectId.value || filters.projectId
-    filters.projectId = projects.value.some((project) => project.projectId === preferredProjectId)
-      ? preferredProjectId
-      : firstProject?.projectId || ''
+    const selection = resolveProjectSelection(
+      res.data.data,
+      routeProjectId.value,
+      import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
+    )
+    projects.value = selection.activeProjects
+    filters.projectId = selection.selectedProjectId
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   }

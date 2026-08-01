@@ -3,6 +3,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import {
+  ElAlert,
   ElButton,
   ElButtonGroup,
   ElCol,
@@ -73,6 +74,7 @@ app.use(router)
 // Explicit registration keeps Rollup tree-shaking effective and avoids
 // shipping every component/icon in the admin shell.
 for (const plugin of [
+  ElAlert,
   ElButton,
   ElButtonGroup,
   ElCol,

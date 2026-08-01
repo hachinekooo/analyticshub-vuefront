@@ -251,13 +251,13 @@ const openProjectMetrics = (project: Project) => {
 }
 
 const getEmptyForm = (): Partial<Project> => ({
-  projectId: 'demo_project_prod',
-  projectName: 'Demo App Production',
+  projectId: '',
+  projectName: '',
   dbHost: 'localhost',
   dbPort: 5432,
-  dbName: 'demo_project_prod',
+  dbName: '',
   dbSchema: 'analytics',
-  dbUser: 'demo_project_prod',
+  dbUser: '',
   dbPassword: '',
   tablePrefix: 'analytics_',
   isActive: true,

@@ -198,6 +198,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import { useI18n } from '@/i18n'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import { resolveProjectSelection } from '@/utils/projectSelection'
 import { getProjects, type Project } from '@/api/admin'
 import {
   deleteSemanticDefinition,
@@ -387,12 +388,14 @@ const removeDefinition = async (definition: SemanticDefinition) => {
 onMounted(async () => {
   try {
     const response = await getProjects()
-    projects.value = response.data.data
     const routeProject = typeof route.query.projectId === 'string' ? route.query.projectId : ''
-    const preferredProjectId = routeProject || import.meta.env.VITE_DEFAULT_PROJECT_ID || ''
-    projectId.value = projects.value.some((project) => project.projectId === preferredProjectId)
-      ? preferredProjectId
-      : projects.value[0]?.projectId || ''
+    const selection = resolveProjectSelection(
+      response.data.data,
+      routeProject,
+      import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
+    )
+    projects.value = selection.activeProjects
+    projectId.value = selection.selectedProjectId
     await refreshAll()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))

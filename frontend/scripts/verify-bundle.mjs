@@ -5,11 +5,17 @@ import { fileURLToPath } from 'node:url'
 const maxRawBytes = 550_000
 const maxGzipBytes = 180_000
 const bundleDirectory = fileURLToPath(new URL('../dist/assets/js/', import.meta.url))
+const forbiddenProjectDefaults = ['demo_project_prod', 'demo_project_test']
 
 const bundles = readdirSync(bundleDirectory)
   .filter((name) => name.endsWith('.js'))
   .map((name) => {
     const content = readFileSync(new URL(`../dist/assets/js/${name}`, import.meta.url))
+    const bundleText = content.toString('utf8')
+    const forbiddenDefault = forbiddenProjectDefaults.find((value) => bundleText.includes(value))
+    if (forbiddenDefault) {
+      throw new Error(`Forbidden demo project ID found in production bundle ${name}: ${forbiddenDefault}`)
+    }
     return { name, rawBytes: content.byteLength, gzipBytes: gzipSync(content).byteLength }
   })
   .sort((left, right) => right.rawBytes - left.rawBytes)

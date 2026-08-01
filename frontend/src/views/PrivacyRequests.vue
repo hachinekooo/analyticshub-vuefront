@@ -105,10 +105,21 @@
           <template #default="{ row }">{{ formatDateTime(row.requestedAt) }}</template>
         </el-table-column>
         <el-table-column prop="operator" :label="t('privacy.tables.operator')" min-width="120" show-overflow-tooltip />
-        <el-table-column :label="t('buttons.actions')" fixed="right" min-width="180">
+        <el-table-column :label="t('buttons.actions')" fixed="right" min-width="280">
           <template #default="{ row }">
             <el-button size="small" link type="primary" @click="openDetail(row)">
               {{ t('privacy.actions.detail') }}
+            </el-button>
+            <el-button
+              v-if="isExecutable(row)"
+              size="small"
+              link
+              :type="row.requestType === 'DELETE' ? 'danger' : 'success'"
+              @click="openExecution(row)"
+            >
+              {{ row.requestType === 'DELETE'
+                ? t('privacy.actions.anonymize')
+                : t('privacy.actions.export') }}
             </el-button>
             <el-button
               size="small"
@@ -213,6 +224,54 @@
       </template>
     </el-dialog>
 
+    <el-dialog v-model="executionVisible" :title="executionDialogTitle" width="600px" destroy-on-close>
+      <template v-if="selectedRequest">
+        <el-alert
+          :title="executionAlertTitle"
+          :description="executionAlertDescription"
+          :type="selectedRequest.requestType === 'DELETE' ? 'warning' : 'info'"
+          show-icon
+          :closable="false"
+          class="execution-alert"
+        />
+        <el-descriptions :column="1" border class="execution-subject">
+          <el-descriptions-item :label="t('privacy.tables.requestId')">
+            {{ selectedRequest.requestId }}
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('tables.userId')">{{ selectedRequest.userId }}</el-descriptions-item>
+          <el-descriptions-item :label="t('tables.deviceId')">{{ selectedRequest.deviceId }}</el-descriptions-item>
+        </el-descriptions>
+        <el-form :model="executionForm" label-position="top">
+          <el-form-item :label="t('privacy.tables.operator')" required>
+            <el-input v-model="executionForm.operator" maxlength="64" show-word-limit />
+          </el-form-item>
+          <el-form-item
+            v-if="selectedRequest.requestType === 'DELETE'"
+            :label="t('privacy.execution.confirmationLabel')"
+            required
+          >
+            <el-input
+              v-model="executionForm.confirmation"
+              :placeholder="selectedRequest.requestId"
+              autocomplete="off"
+            />
+          </el-form-item>
+        </el-form>
+      </template>
+      <template #footer>
+        <el-button @click="executionVisible = false">{{ t('buttons.cancel') }}</el-button>
+        <el-button
+          :type="selectedRequest?.requestType === 'DELETE' ? 'danger' : 'primary'"
+          :loading="executing"
+          @click="submitExecution"
+        >
+          {{ selectedRequest?.requestType === 'DELETE'
+            ? t('privacy.actions.confirmAnonymize')
+            : t('privacy.actions.confirmExport') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog v-model="notifyVisible" :title="t('privacy.notifyTitle')" width="520px">
       <el-form :model="notifyForm" label-position="top">
         <el-form-item :label="t('privacy.fields.subject')">
@@ -240,11 +299,13 @@ import { ElMessage } from 'element-plus'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import { useI18n } from '@/i18n'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import { resolveProjectSelection } from '@/utils/projectSelection'
 import { getProjects, type Project } from '@/api/admin'
 import {
   getPrivacyRequestDetail,
   getPrivacyRequestActivities,
   getPrivacyRequests,
+  executePrivacyRequest,
   notifyPrivacyRequestUser,
   updatePrivacyRequest,
   type PrivacyProcessor,
@@ -274,6 +335,7 @@ const projects = ref<Project[]>([])
 const loading = ref(false)
 const updating = ref(false)
 const notifying = ref(false)
+const executing = ref(false)
 const selectedRequest = ref<PrivacyRequestItem | null>(null)
 const selectedProjectId = ref('')
 const selectedDetail = ref<PrivacyRequestDetail | null>(null)
@@ -282,6 +344,7 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const updateVisible = ref(false)
 const notifyVisible = ref(false)
+const executionVisible = ref(false)
 const resultPayloadText = ref('')
 let requestGeneration = 0
 
@@ -296,7 +359,7 @@ const requests = reactive<PrivacyRequestsResponse>({
 })
 
 const filters = reactive({
-  projectId: import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
+  projectId: '',
   dateRange: null as string[] | null,
   page: 1,
   pageSize: 20,
@@ -321,15 +384,44 @@ const notifyForm = reactive({
   operator: '',
 })
 
+const executionForm = reactive({
+  operator: '',
+  confirmation: '',
+})
+
 const isFinalStatus = (status: PrivacyRequestStatus) =>
   status === 'COMPLETED' || status === 'REJECTED' || status === 'CANCELLED'
 
+const isExecutable = (request: PrivacyRequestItem) =>
+  request.processor === 'ANALYTICSHUB' && !isFinalStatus(request.status)
+
 const allowedTargetStatuses = computed<PrivacyRequestStatus[]>(() => {
   const current = selectedRequest.value?.status
-  if (current === 'SUBMITTED') return ['IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED']
-  if (current === 'IN_PROGRESS') return ['COMPLETED', 'REJECTED', 'CANCELLED']
+  const requiresDataExecution = selectedRequest.value?.processor === 'ANALYTICSHUB'
+  if (current === 'SUBMITTED') {
+    return requiresDataExecution
+      ? ['IN_PROGRESS', 'REJECTED', 'CANCELLED']
+      : ['IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED']
+  }
+  if (current === 'IN_PROGRESS') {
+    return requiresDataExecution
+      ? ['REJECTED', 'CANCELLED']
+      : ['COMPLETED', 'REJECTED', 'CANCELLED']
+  }
   return current ? [current] : []
 })
+
+const executionDialogTitle = computed(() => selectedRequest.value?.requestType === 'DELETE'
+  ? t('privacy.execution.anonymizeTitle')
+  : t('privacy.execution.exportTitle'))
+
+const executionAlertTitle = computed(() => selectedRequest.value?.requestType === 'DELETE'
+  ? t('privacy.execution.anonymizeAlertTitle')
+  : t('privacy.execution.exportAlertTitle'))
+
+const executionAlertDescription = computed(() => selectedRequest.value?.requestType === 'DELETE'
+  ? t('privacy.execution.anonymizeDescription')
+  : t('privacy.execution.exportDescription'))
 
 const cleanParams = <T extends Record<string, unknown>>(params: T): T => {
   return Object.fromEntries(
@@ -347,13 +439,14 @@ const rangeParams = () => {
 const loadProjects = async () => {
   try {
     const res = await getProjects()
-    projects.value = res.data.data
-    const firstProject = projects.value[0]
     const routeProjectId = typeof route.query.projectId === 'string' ? route.query.projectId : ''
-    const preferredProjectId = routeProjectId || filters.projectId
-    filters.projectId = projects.value.some((project) => project.projectId === preferredProjectId)
-      ? preferredProjectId
-      : firstProject?.projectId || ''
+    const selection = resolveProjectSelection(
+      res.data.data,
+      routeProjectId,
+      import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
+    )
+    projects.value = selection.activeProjects
+    filters.projectId = selection.selectedProjectId
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   }
@@ -376,10 +469,12 @@ const clearRequestContext = () => {
   detailVisible.value = false
   updateVisible.value = false
   notifyVisible.value = false
+  executionVisible.value = false
   loading.value = false
   detailLoading.value = false
   updating.value = false
   notifying.value = false
+  executing.value = false
 }
 
 const handleProjectChange = async () => {
@@ -477,6 +572,67 @@ const openNotify = (row: PrivacyRequestItem) => {
   notifyForm.message = ''
   notifyForm.operator = row.operator || ''
   notifyVisible.value = true
+}
+
+const openExecution = (row: PrivacyRequestItem) => {
+  if (!isExecutable(row)) return
+  selectedRequest.value = row
+  selectedProjectId.value = requests.projectId || filters.projectId
+  executionForm.operator = row.operator || ''
+  executionForm.confirmation = ''
+  executionVisible.value = true
+}
+
+const downloadExport = (data: Record<string, unknown>, fileName: string) => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
+const submitExecution = async () => {
+  if (!selectedRequest.value) return
+  const projectId = selectedProjectId.value
+  const workOrder = selectedRequest.value
+  if (!projectId || !executionForm.operator.trim()) {
+    ElMessage.warning(t('privacy.errors.operatorRequired'))
+    return
+  }
+  if (workOrder.requestType === 'DELETE'
+    && executionForm.confirmation.trim() !== workOrder.requestId) {
+    ElMessage.warning(t('privacy.errors.confirmationMismatch'))
+    return
+  }
+
+  executing.value = true
+  try {
+    const response = await executePrivacyRequest(projectId, workOrder.requestId, {
+      version: workOrder.version,
+      operator: executionForm.operator.trim(),
+      confirmation: workOrder.requestType === 'DELETE'
+        ? executionForm.confirmation.trim()
+        : undefined,
+    })
+    if (selectedProjectId.value !== projectId || filters.projectId !== projectId) return
+    const result = response.data.data
+    if (result.exportData && result.downloadFileName) {
+      downloadExport(result.exportData, result.downloadFileName)
+      ElMessage.success(t('privacy.messages.exported'))
+    } else {
+      ElMessage.success(t('privacy.messages.anonymized'))
+    }
+    executionVisible.value = false
+    await loadRequests()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('privacy.errors.executionFailed')))
+  } finally {
+    executing.value = false
+  }
 }
 
 const parseResultPayload = () => {
@@ -656,6 +812,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .request-table {
@@ -689,7 +846,15 @@ onMounted(async () => {
   overflow: auto;
 }
 
-@media (max-width: 960px) {
+.execution-alert {
+  margin-bottom: 16px;
+}
+
+.execution-subject {
+  margin-bottom: 18px;
+}
+
+@media (max-width: 1280px) {
   .header-card {
     flex-direction: column;
     align-items: flex-start;

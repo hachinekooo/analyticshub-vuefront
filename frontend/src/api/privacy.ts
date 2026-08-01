@@ -75,6 +75,23 @@ export type PrivacyRequestNotifyPayload = {
   operator?: string
 }
 
+export type PrivacyExecutionPayload = {
+  version: number
+  operator: string
+  confirmation?: string
+}
+
+export type PrivacyExecutionResponse = {
+  requestId: string
+  requestType: PrivacyRequestType
+  status: 'COMPLETED'
+  executedAt: string
+  version: number
+  downloadFileName: string | null
+  summary: Record<string, unknown>
+  exportData: Record<string, unknown> | null
+}
+
 export type WorkOrderActivity = {
   activityId: string
   activityType: string
@@ -127,6 +144,18 @@ export const notifyPrivacyRequestUser = (
 ) => {
   return request.post<ApiResponse<WorkOrderNotificationQueued>>(
     `/admin/privacy/requests/${requestId}/notify`,
+    payload,
+    { params: { projectId } },
+  )
+}
+
+export const executePrivacyRequest = (
+  projectId: string,
+  requestId: string,
+  payload: PrivacyExecutionPayload,
+) => {
+  return request.post<ApiResponse<PrivacyExecutionResponse>>(
+    `/admin/privacy/requests/${requestId}/execute`,
     payload,
     { params: { projectId } },
   )
