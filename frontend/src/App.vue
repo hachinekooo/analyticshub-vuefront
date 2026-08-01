@@ -1,9 +1,17 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterView } from 'vue-router'
+import en from 'element-plus/es/locale/lang/en'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import { locale } from '@/i18n'
+
+const elementLocale = computed(() => (locale.value === 'zh' ? zhCn : en))
 </script>
 
 <template>
-  <RouterView />
+  <el-config-provider :locale="elementLocale">
+    <RouterView />
+  </el-config-provider>
 </template>
 
 <style>

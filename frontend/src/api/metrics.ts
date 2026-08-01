@@ -1,7 +1,14 @@
 import request from '@/utils/request'
+import type { CounterEventTrigger } from '@/features/counters/eventTrigger'
+
+export type {
+  CounterEventTrigger,
+  CounterEventTriggerClause,
+} from '@/features/counters/eventTrigger'
 import type { ApiResponse } from '@/api/admin'
 
-export type Granularity = 'hour' | 'day' | 'week' | 'month' | 'year'
+export type MetricsGranularity = 'hour' | 'day'
+export type TrafficGranularity = MetricsGranularity | 'week' | 'month' | 'year'
 
 export type MetricsOverview = {
   projectId: string
@@ -24,7 +31,7 @@ export type TrendPoint = {
 
 export type MetricsTrends = {
   projectId: string
-  granularity: Granularity
+  granularity: MetricsGranularity
   rangeStart: string
   rangeEnd: string
   points: TrendPoint[]
@@ -114,8 +121,37 @@ export type TrafficSummary = {
 export type CounterItem = {
   key: string
   value: number
+  displayName: Record<string, string> | string | null
+  unit: Record<string, string> | string | null
+  eventTrigger: CounterEventTrigger | null
   isPublic: boolean
+  description: string | null
   updatedAt: string
+  lastRebuiltAt: string | null
+  lastRebuildEventCount: number | null
+}
+
+export type CounterUpsertPayload = {
+  value?: number
+  displayName?: Record<string, string>
+  unit?: Record<string, string>
+  eventTrigger?: CounterEventTrigger
+  clearEventTrigger?: boolean
+  isPublic?: boolean
+  description?: string
+}
+
+export type PublicCounterItem = {
+  key: string
+  value: number
+  displayName: string
+  unit: string
+  updatedAt: string
+}
+
+export type CountersResponse = {
+  projectId: string
+  items: CounterItem[]
 }
 
 export type TrafficTrendPoint = {
@@ -126,20 +162,66 @@ export type TrafficTrendPoint = {
 
 export type TrafficTrends = {
   projectId: string
-  granularity: Granularity
+  granularity: TrafficGranularity
   rangeStart: string
   rangeEnd: string
   points: TrafficTrendPoint[]
 }
 
 export type TopPageItem = {
-  pagePath: string
+  key: string
   count: number
 }
 
 export type TopReferrerItem = {
-  referrer: string
+  key: string
   count: number
+}
+
+export type TrafficTopResponse<T extends TopPageItem | TopReferrerItem> = {
+  projectId: string
+  rangeStart: string
+  rangeEnd: string
+  items: T[]
+}
+
+export type FunnelStepResult = {
+  stepIndex: number
+  eventType: string
+  users: number
+  conversionRate: number
+  dropOffRate: number
+}
+
+export type FunnelGroupResult = {
+  groupValue: string
+  steps: FunnelStepResult[]
+}
+
+export type FunnelResponse = {
+  projectId: string
+  rangeStart: string
+  rangeEnd: string
+  steps: string[]
+  groupBy: string | null
+  attributionModel: string
+  groups: FunnelGroupResult[]
+}
+
+export type RetentionBucket = {
+  day: number
+  retainedUsers: number
+  retentionRate: number
+}
+
+export type RetentionResponse = {
+  projectId: string
+  rangeStart: string
+  rangeEnd: string
+  cohortEvent: string
+  returnEvent: string
+  cohortUsers: number
+  buckets: RetentionBucket[]
 }
 
 export const getMetricsOverview = (params: {
@@ -154,7 +236,7 @@ export const getMetricsTrends = (params: {
   projectId: string
   from?: string
   to?: string
-  granularity?: Granularity
+  granularity?: MetricsGranularity
 }) => {
   return request.get<ApiResponse<MetricsTrends>>('/admin/metrics/trends', { params })
 }
@@ -164,6 +246,7 @@ export const getTopEvents = (params: {
   from?: string
   to?: string
   limit?: number
+  aggregation?: 'raw' | 'semantic'
 }) => {
   return request.get<ApiResponse<MetricsTopEvents>>('/admin/metrics/top-events', { params })
 }
@@ -231,31 +314,92 @@ export const getTrafficSummary = (params: {
 }
 
 export const getCounters = (params: { projectId: string }) => {
-  return request.get<ApiResponse<PagedResult<CounterItem>>>('/admin/counters', { params })
+  return request.get<ApiResponse<CountersResponse>>('/admin/counters', { params })
 }
 
 export const getCounter = (key: string, params: { projectId: string }) => {
-  return request.get<ApiResponse<CounterItem>>(`/admin/counters/${key}`, { params })
+  return request.get<ApiResponse<CounterItem>>(`/admin/counters/${encodeURIComponent(key)}`, { params })
+}
+
+export const upsertCounter = (
+  key: string,
+  projectId: string,
+  payload: CounterUpsertPayload,
+) => {
+  return request.put<ApiResponse<CounterItem>>(
+    `/admin/counters/${encodeURIComponent(key)}`,
+    payload,
+    { params: { projectId } },
+  )
 }
 
 export const setCounter = (
   key: string,
-  params: { projectId: string; value: number; isPublic?: boolean }
+  params: { projectId: string; value: number; isPublic?: boolean },
 ) => {
-  const body = { value: params.value, isPublic: params.isPublic }
-  return request.put<ApiResponse<CounterItem>>(`/admin/counters/${key}`, body, { params: { projectId: params.projectId } })
+  return upsertCounter(key, params.projectId, {
+    value: params.value,
+    isPublic: params.isPublic,
+  })
+}
+
+export const deleteCounter = (key: string, params: { projectId: string }) => {
+  return request.delete<ApiResponse<null>>(
+    `/admin/counters/${encodeURIComponent(key)}`,
+    { params },
+  )
+}
+
+export const getCounterEventTypes = (params: { projectId: string }) => {
+  return request.get<ApiResponse<string[]>>('/admin/counters/metadata/event-types', { params })
 }
 
 export const incrementCounter = (key: string, params: { projectId: string }) => {
-  return request.post<ApiResponse<CounterItem>>(`/admin/counters/${key}/increment`, null, { params })
+  return request.post<ApiResponse<CounterItem>>(
+    `/admin/counters/${encodeURIComponent(key)}/increment`,
+    null,
+    { params },
+  )
+}
+
+export const rebuildCounter = (key: string, params: { projectId: string }) => {
+  return request.post<ApiResponse<CounterItem>>(
+    `/admin/counters/${encodeURIComponent(key)}/rebuild`,
+    null,
+    { params },
+  )
 }
 
 export const getPublicCounters = (params: { projectId: string }) => {
-  return request.get<ApiResponse<CounterItem[]>>('/public/counters', { params })
+  return request.get<ApiResponse<PublicCounterItem[]>>('/public/counters', { params })
 }
 
 export const getPublicCounter = (key: string, params: { projectId: string }) => {
-  return request.get<ApiResponse<CounterItem>>(`/public/counters/${key}`, { params })
+  return request.get<ApiResponse<PublicCounterItem | null>>(
+    `/public/counters/${encodeURIComponent(key)}`,
+    { params },
+  )
+}
+
+export const getProductFunnel = (params: {
+  projectId: string
+  from?: string
+  to?: string
+  steps: string
+  groupBy?: string
+}) => {
+  return request.get<ApiResponse<FunnelResponse>>('/admin/analytics/funnel', { params })
+}
+
+export const getProductRetention = (params: {
+  projectId: string
+  from?: string
+  to?: string
+  cohortEvent: string
+  returnEvent: string
+  days?: string
+}) => {
+  return request.get<ApiResponse<RetentionResponse>>('/admin/analytics/retention', { params })
 }
 
 export const getPublicTrafficSummary = (params: {
@@ -270,7 +414,7 @@ export const getTrafficTrends = (params: {
   projectId: string
   from?: string
   to?: string
-  granularity?: Granularity
+  granularity?: TrafficGranularity
 }) => {
   return request.get<ApiResponse<TrafficTrends>>('/admin/traffic-metrics/trends', { params })
 }
@@ -281,7 +425,7 @@ export const getTopPages = (params: {
   to?: string
   limit?: number
 }) => {
-  return request.get<ApiResponse<TopPageItem[]>>('/admin/traffic-metrics/top-pages', { params })
+  return request.get<ApiResponse<TrafficTopResponse<TopPageItem>>>('/admin/traffic-metrics/top-pages', { params })
 }
 
 export const getTopReferrers = (params: {
@@ -290,5 +434,5 @@ export const getTopReferrers = (params: {
   to?: string
   limit?: number
 }) => {
-  return request.get<ApiResponse<TopReferrerItem[]>>('/admin/traffic-metrics/top-referrers', { params })
+  return request.get<ApiResponse<TrafficTopResponse<TopReferrerItem>>>('/admin/traffic-metrics/top-referrers', { params })
 }

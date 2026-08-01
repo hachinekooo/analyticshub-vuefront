@@ -15,6 +15,10 @@
             <el-icon class="el-icon--left"><TrendCharts /></el-icon>
             {{ t('nav.metrics') }}
           </el-button>
+          <el-button :type="isSemanticRoute ? 'primary' : 'default'" @click="goSemantics">
+            <el-icon class="el-icon--left"><CollectionTag /></el-icon>
+            {{ t('nav.semantics') }}
+          </el-button>
           <el-button :type="isPrivacyRoute ? 'primary' : 'default'" @click="goPrivacyRequests">
             <el-icon class="el-icon--left"><Tickets /></el-icon>
             {{ t('nav.privacyRequests') }}
@@ -78,8 +82,20 @@
             <span class="health-badge" :class="project.health.tables.sessions ? 'success' : 'warning'">
               {{ project.health.tables.sessions ? '✓' : '✗' }} {{ t('status.sessions') }}
             </span>
-            <span class="health-badge" :class="project.health.tables.trafficMetrics ? 'success' : 'warning'">
-              {{ project.health.tables.trafficMetrics ? '✓' : '✗' }} {{ t('status.traffic') }}
+            <span class="health-badge" :class="project.health.tables.traffic_metrics ? 'success' : 'warning'">
+              {{ project.health.tables.traffic_metrics ? '✓' : '✗' }} {{ t('status.traffic') }}
+            </span>
+            <span
+              v-if="project.health.connected"
+              class="health-badge"
+              :class="project.health.schemaCurrent ? 'success' : 'warning'"
+              :title="project.health.historyTable || undefined"
+            >
+              {{ t('dashboard.labels.schema') }}:
+              {{ project.health.schemaVersion ? `v${project.health.schemaVersion}` : '-' }}
+              <template v-if="project.health.pendingMigrations > 0">
+                (+{{ project.health.pendingMigrations }})
+              </template>
             </span>
           </div>
 
@@ -88,7 +104,7 @@
               <el-icon class="el-icon--left"><View /></el-icon> {{ t('buttons.checkStatus') }}
             </el-button>
             <el-button size="small" type="success" @click="handleInitDatabase(project)"
-                v-if="project.health && !project.health.allTablesExist" plain>
+                v-if="project.health?.connected && !project.health.schemaCurrent" plain>
               <el-icon class="el-icon--left"><CirclePlus /></el-icon> {{ t('buttons.initTables') }}
             </el-button>
             <el-button size="small" type="primary" @click="handleEditProject(project)" plain>
@@ -200,6 +216,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import { useI18n } from '@/i18n'
+import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
 import { 
   getProjects, 
   createProject, 
@@ -220,25 +237,17 @@ const route = useRoute()
 
 const isProjectsRoute = computed(() => route.path === '/')
 const isMetricsRoute = computed(() => route.path === '/metrics')
+const isSemanticRoute = computed(() => route.path === '/semantics')
 const isPrivacyRoute = computed(() => route.path === '/privacy-requests')
 
 const goProjects = () => router.push('/')
 const goMetrics = () => router.push('/metrics')
+const goSemantics = () => router.push('/semantics')
 const goPrivacyRequests = () => router.push('/privacy-requests')
 const { t } = useI18n()
 
 const openProjectMetrics = (project: Project) => {
   router.push({ path: '/metrics', query: { projectId: project.projectId } })
-}
-
-type ErrorPayload = {
-  error?: { message?: string }
-  message?: string
-}
-
-const getErrorMessage = (err: unknown, fallback: string) => {
-  const e = err as { response?: { data?: ErrorPayload } }
-  return e.response?.data?.error?.message || fallback
 }
 
 const getEmptyForm = (): Partial<Project> => ({
@@ -279,8 +288,15 @@ const handleCheckHealth = async (project: Project) => {
     // Fallback state keeps UI consistent when the health endpoint fails.
     project.health = { 
       connected: false, 
-      tables: { devices: false, events: false, sessions: false, trafficMetrics: false }, 
-      allTablesExist: false 
+      tables: {},
+      allTablesExist: false,
+      schemaCurrent: false,
+      migrationHistoryValid: false,
+      schemaVersion: null,
+      pendingMigrations: 0,
+      historyTable: null,
+      errorCode: null,
+      error: null,
     }
   } finally {
     project.healthLoading = false
@@ -327,7 +343,7 @@ const handleInitDatabase = async (project: Project) => {
     )
     
     const res = await initProjectDatabase(project.id)
-    ElMessage.success(res.data.message || t('messages.initSuccess'))
+    ElMessage.success(res.data.data.message || t('messages.initSuccess'))
     handleCheckHealth(project)
   } catch (error) {
       if (error !== 'cancel') {

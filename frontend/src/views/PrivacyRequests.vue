@@ -15,6 +15,10 @@
             <el-icon class="el-icon--left"><TrendCharts /></el-icon>
             {{ t('nav.metrics') }}
           </el-button>
+          <el-button :type="isSemanticRoute ? 'primary' : 'default'" @click="goSemantics">
+            <el-icon class="el-icon--left"><CollectionTag /></el-icon>
+            {{ t('nav.semantics') }}
+          </el-button>
           <el-button type="primary">
             <el-icon class="el-icon--left"><Tickets /></el-icon>
             {{ t('nav.privacyRequests') }}
@@ -22,7 +26,7 @@
         </el-button-group>
         <LanguageToggle />
         <el-tooltip :content="t('buttons.refresh')" placement="top">
-          <el-button type="primary" :loading="loading" circle plain @click="loadRequests">
+          <el-button :aria-label="t('buttons.refresh')" type="primary" :loading="loading" circle plain @click="loadRequests">
             <el-icon><Refresh /></el-icon>
           </el-button>
         </el-tooltip>
@@ -32,7 +36,13 @@
     <div class="content-card">
       <div class="filter-bar">
         <el-form :model="filters" inline class="filter-form">
-          <el-select v-model="filters.projectId" :placeholder="t('filters.selectProject')" filterable style="width: 180px">
+          <el-select
+            v-model="filters.projectId"
+            :placeholder="t('filters.selectProject')"
+            filterable
+            style="width: 180px"
+            @change="handleProjectChange"
+          >
             <el-option
               v-for="project in projects"
               :key="project.id"
@@ -51,6 +61,11 @@
           <el-select v-model="filters.status" clearable :placeholder="t('privacy.filters.status')" style="width: 150px">
             <el-option v-for="status in privacyStatuses" :key="status" :label="statusLabel(status)" :value="status" />
           </el-select>
+          <el-switch
+            v-model="filters.openOnly"
+            :disabled="Boolean(filters.status)"
+            :active-text="t('privacy.filters.openOnly')"
+          />
           <el-select v-model="filters.requestType" clearable :placeholder="t('privacy.filters.type')" style="width: 130px">
             <el-option label="EXPORT" value="EXPORT" />
             <el-option label="DELETE" value="DELETE" />
@@ -60,7 +75,7 @@
             <el-option label="POSTHOG" value="POSTHOG" />
           </el-select>
           <el-input v-model="filters.userId" clearable :placeholder="t('filters.userId')" style="width: 180px" />
-          <el-button type="primary" :loading="loading" @click="loadRequests">
+          <el-button type="primary" :loading="loading" @click="applyFilters">
             <el-icon class="el-icon--left"><Search /></el-icon>
             {{ t('buttons.refresh') }}
           </el-button>
@@ -95,7 +110,13 @@
             <el-button size="small" link type="primary" @click="openDetail(row)">
               {{ t('privacy.actions.detail') }}
             </el-button>
-            <el-button size="small" link type="success" @click="openUpdate(row)">
+            <el-button
+              size="small"
+              link
+              type="success"
+              :disabled="isFinalStatus(row.status)"
+              @click="openUpdate(row)"
+            >
               {{ t('privacy.actions.process') }}
             </el-button>
             <el-button size="small" link type="warning" @click="openNotify(row)">
@@ -118,8 +139,9 @@
       </div>
     </div>
 
-    <el-drawer v-model="detailVisible" :title="t('privacy.detailTitle')" size="560px">
-      <div v-if="selectedDetail" class="detail-body">
+    <el-drawer v-model="detailVisible" :title="t('privacy.detailTitle')" size="620px">
+      <div v-loading="detailLoading" class="detail-body">
+      <template v-if="selectedDetail">
         <el-descriptions :column="1" border>
           <el-descriptions-item :label="t('privacy.tables.requestId')">{{ selectedDetail.requestId }}</el-descriptions-item>
           <el-descriptions-item :label="t('privacy.tables.type')">{{ selectedDetail.requestType }}</el-descriptions-item>
@@ -139,6 +161,26 @@
 
         <h3 class="detail-section-title">{{ t('privacy.fields.resultPayload') }}</h3>
         <pre class="json-block">{{ formatJsonBlock(selectedDetail.resultPayload) }}</pre>
+
+        <h3 class="detail-section-title">{{ t('privacy.fields.activities') }}</h3>
+        <el-timeline v-if="activities.length">
+          <el-timeline-item
+            v-for="activity in activities"
+            :key="activity.activityId"
+            :timestamp="formatDateTime(activity.createdAt)"
+            placement="top"
+          >
+            <div class="activity-title">{{ activityLabel(activity.activityType) }}</div>
+            <div v-if="activity.fromStatus || activity.toStatus" class="activity-meta">
+              {{ activity.fromStatus || '-' }} → {{ activity.toStatus || '-' }}
+            </div>
+            <div v-if="activity.actor" class="activity-meta">
+              {{ t('privacy.tables.operator') }}: {{ activity.actor }}
+            </div>
+          </el-timeline-item>
+        </el-timeline>
+        <el-empty v-else :description="t('privacy.fields.noActivities')" :image-size="64" />
+      </template>
       </div>
     </el-drawer>
 
@@ -146,7 +188,7 @@
       <el-form :model="updateForm" label-position="top">
         <el-form-item :label="t('privacy.filters.status')">
           <el-select v-model="updateForm.status" style="width: 100%">
-            <el-option v-for="status in privacyStatuses" :key="status" :label="statusLabel(status)" :value="status" />
+            <el-option v-for="status in allowedTargetStatuses" :key="status" :label="statusLabel(status)" :value="status" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('privacy.tables.operator')">
@@ -197,9 +239,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import { useI18n } from '@/i18n'
+import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
 import { getProjects, type Project } from '@/api/admin'
 import {
   getPrivacyRequestDetail,
+  getPrivacyRequestActivities,
   getPrivacyRequests,
   notifyPrivacyRequestUser,
   updatePrivacyRequest,
@@ -210,12 +254,8 @@ import {
   type PrivacyRequestsResponse,
   type PrivacyRequestStatus,
   type PrivacyRequestType,
+  type WorkOrderActivity,
 } from '@/api/privacy'
-
-type ErrorPayload = {
-  error?: { message?: string }
-  message?: string
-}
 
 const router = useRouter()
 const route = useRoute()
@@ -223,9 +263,11 @@ const { t } = useI18n()
 
 const isProjectsRoute = computed(() => route.path === '/')
 const isMetricsRoute = computed(() => route.path === '/metrics')
+const isSemanticRoute = computed(() => route.path === '/semantics')
 
 const goProjects = () => router.push('/')
-const goMetrics = () => router.push('/metrics')
+const goMetrics = () => router.push({ path: '/metrics', query: filters.projectId ? { projectId: filters.projectId } : {} })
+const goSemantics = () => router.push({ path: '/semantics', query: filters.projectId ? { projectId: filters.projectId } : {} })
 
 const privacyStatuses: PrivacyRequestStatus[] = ['SUBMITTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED']
 const projects = ref<Project[]>([])
@@ -233,11 +275,15 @@ const loading = ref(false)
 const updating = ref(false)
 const notifying = ref(false)
 const selectedRequest = ref<PrivacyRequestItem | null>(null)
+const selectedProjectId = ref('')
 const selectedDetail = ref<PrivacyRequestDetail | null>(null)
+const activities = ref<WorkOrderActivity[]>([])
 const detailVisible = ref(false)
+const detailLoading = ref(false)
 const updateVisible = ref(false)
 const notifyVisible = ref(false)
 const resultPayloadText = ref('')
+let requestGeneration = 0
 
 const requests = reactive<PrivacyRequestsResponse>({
   projectId: '',
@@ -258,6 +304,7 @@ const filters = reactive({
   requestType: '' as '' | PrivacyRequestType,
   processor: '' as '' | PrivacyProcessor,
   userId: '',
+  openOnly: true,
 })
 
 const updateForm = reactive({
@@ -274,10 +321,15 @@ const notifyForm = reactive({
   operator: '',
 })
 
-const getErrorMessage = (err: unknown, fallback: string) => {
-  const e = err as { response?: { data?: ErrorPayload } }
-  return e.response?.data?.error?.message || fallback
-}
+const isFinalStatus = (status: PrivacyRequestStatus) =>
+  status === 'COMPLETED' || status === 'REJECTED' || status === 'CANCELLED'
+
+const allowedTargetStatuses = computed<PrivacyRequestStatus[]>(() => {
+  const current = selectedRequest.value?.status
+  if (current === 'SUBMITTED') return ['IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED']
+  if (current === 'IN_PROGRESS') return ['COMPLETED', 'REJECTED', 'CANCELLED']
+  return current ? [current] : []
+})
 
 const cleanParams = <T extends Record<string, unknown>>(params: T): T => {
   return Object.fromEntries(
@@ -297,11 +349,46 @@ const loadProjects = async () => {
     const res = await getProjects()
     projects.value = res.data.data
     const firstProject = projects.value[0]
-    if (!filters.projectId && firstProject) {
-      filters.projectId = firstProject.projectId
-    }
+    const routeProjectId = typeof route.query.projectId === 'string' ? route.query.projectId : ''
+    const preferredProjectId = routeProjectId || filters.projectId
+    filters.projectId = projects.value.some((project) => project.projectId === preferredProjectId)
+      ? preferredProjectId
+      : firstProject?.projectId || ''
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
+  }
+}
+
+const clearRequestContext = () => {
+  Object.assign(requests, {
+    projectId: filters.projectId,
+    rangeStart: null,
+    rangeEnd: null,
+    page: 1,
+    pageSize: filters.pageSize,
+    total: 0,
+    items: [],
+  })
+  selectedRequest.value = null
+  selectedProjectId.value = ''
+  selectedDetail.value = null
+  activities.value = []
+  detailVisible.value = false
+  updateVisible.value = false
+  notifyVisible.value = false
+  loading.value = false
+  detailLoading.value = false
+  updating.value = false
+  notifying.value = false
+}
+
+const handleProjectChange = async () => {
+  requestGeneration += 1
+  filters.page = 1
+  clearRequestContext()
+  if (filters.projectId) {
+    await router.replace({ path: '/privacy-requests', query: { projectId: filters.projectId } })
+    await loadRequests()
   }
 }
 
@@ -311,13 +398,16 @@ const loadRequests = async () => {
     return
   }
 
+  const projectId = filters.projectId
+  const generation = ++requestGeneration
   loading.value = true
   try {
     const params: PrivacyRequestListParams = cleanParams({
-      projectId: filters.projectId,
+      projectId,
       page: filters.page,
       pageSize: filters.pageSize,
       userId: filters.userId,
+      openOnly: filters.openOnly,
       ...rangeParams(),
     })
     if (filters.status) params.status = filters.status
@@ -325,27 +415,52 @@ const loadRequests = async () => {
     if (filters.processor) params.processor = filters.processor
 
     const res = await getPrivacyRequests(params)
+    if (generation !== requestGeneration || filters.projectId !== projectId) return
     Object.assign(requests, res.data.data)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('privacy.errors.loadFailed')))
+    if (generation === requestGeneration && filters.projectId === projectId) {
+      ElMessage.error(getErrorMessage(error, t('privacy.errors.loadFailed')))
+    }
   } finally {
-    loading.value = false
+    if (generation === requestGeneration && filters.projectId === projectId) loading.value = false
   }
 }
 
+const applyFilters = () => {
+  filters.page = 1
+  loadRequests()
+}
+
 const openDetail = async (row: PrivacyRequestItem) => {
+  const projectId = requests.projectId || filters.projectId
   selectedRequest.value = row
+  selectedProjectId.value = projectId
+  selectedDetail.value = null
+  activities.value = []
   detailVisible.value = true
+  detailLoading.value = true
   try {
-    const res = await getPrivacyRequestDetail(filters.projectId, row.requestId)
-    selectedDetail.value = res.data.data
+    const [detailResponse, activityResponse] = await Promise.all([
+      getPrivacyRequestDetail(projectId, row.requestId),
+      getPrivacyRequestActivities(projectId, row.requestId),
+    ])
+    if (selectedProjectId.value !== projectId
+      || selectedRequest.value?.requestId !== row.requestId) return
+    selectedDetail.value = detailResponse.data.data
+    activities.value = activityResponse.data.data
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('privacy.errors.detailFailed')))
+    if (selectedProjectId.value === projectId) {
+      ElMessage.error(getErrorMessage(error, t('privacy.errors.detailFailed')))
+    }
+  } finally {
+    if (selectedProjectId.value === projectId) detailLoading.value = false
   }
 }
 
 const openUpdate = async (row: PrivacyRequestItem) => {
+  if (isFinalStatus(row.status)) return
   selectedRequest.value = row
+  selectedProjectId.value = requests.projectId || filters.projectId
   updateForm.status = row.status === 'SUBMITTED' ? 'IN_PROGRESS' : row.status
   updateForm.operator = row.operator || ''
   updateForm.operatorNote = ''
@@ -357,6 +472,7 @@ const openUpdate = async (row: PrivacyRequestItem) => {
 
 const openNotify = (row: PrivacyRequestItem) => {
   selectedRequest.value = row
+  selectedProjectId.value = requests.projectId || filters.projectId
   notifyForm.subject = `Privacy request update: ${row.requestId}`
   notifyForm.message = ''
   notifyForm.operator = row.operator || ''
@@ -376,10 +492,14 @@ const parseResultPayload = () => {
 
 const submitUpdate = async () => {
   if (!selectedRequest.value) return
+  const projectId = selectedProjectId.value
+  const requestId = selectedRequest.value.requestId
+  if (!projectId) return
   updating.value = true
   try {
     const resultPayload = parseResultPayload()
-    await updatePrivacyRequest(filters.projectId, selectedRequest.value.requestId, cleanParams({
+    await updatePrivacyRequest(projectId, requestId, cleanParams({
+      version: selectedRequest.value.version,
       status: updateForm.status,
       operator: updateForm.operator,
       operatorNote: updateForm.operatorNote,
@@ -387,6 +507,7 @@ const submitUpdate = async () => {
       notifyUser: updateForm.notifyUser,
       notificationMessage: updateForm.notificationMessage,
     }))
+    if (selectedProjectId.value !== projectId || filters.projectId !== projectId) return
     ElMessage.success(t('privacy.messages.updated'))
     updateVisible.value = false
     loadRequests()
@@ -401,6 +522,9 @@ const submitUpdate = async () => {
 
 const submitNotify = async () => {
   if (!selectedRequest.value) return
+  const projectId = selectedProjectId.value
+  const requestId = selectedRequest.value.requestId
+  if (!projectId) return
   if (!notifyForm.subject.trim() || !notifyForm.message.trim()) {
     ElMessage.warning(t('privacy.errors.notifyRequired'))
     return
@@ -408,12 +532,15 @@ const submitNotify = async () => {
 
   notifying.value = true
   try {
-    await notifyPrivacyRequestUser(filters.projectId, selectedRequest.value.requestId, cleanParams({
+    const response = await notifyPrivacyRequestUser(projectId, requestId, cleanParams({
       subject: notifyForm.subject,
       message: notifyForm.message,
       operator: notifyForm.operator,
     }))
-    ElMessage.success(t('privacy.messages.notified'))
+    if (selectedProjectId.value !== projectId || filters.projectId !== projectId) return
+    ElMessage.success(t('privacy.messages.notificationQueued', {
+      notificationId: response.data.data.notificationId,
+    }))
     notifyVisible.value = false
     loadRequests()
   } catch (error) {
@@ -442,6 +569,12 @@ const statusTagType = (status: PrivacyRequestStatus) => {
 }
 
 const statusLabel = (status: PrivacyRequestStatus) => t(`privacy.status.${status}`)
+
+const activityLabel = (activityType: string) => {
+  const key = `privacy.activities.${activityType}`
+  const label = t(key)
+  return label === key ? activityType : label
+}
 
 const formatDateTime = (value?: string | null) => {
   if (!value) return '-'

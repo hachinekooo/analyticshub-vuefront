@@ -3,11 +3,14 @@ import type { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import router from '@/router'
 import { t } from '@/i18n'
+import { isTwoFactorRequired, type TwoFactorErrorPayload } from './twoFactor'
 
-type ErrorPayload = {
-  code?: string
-  error?: { message?: string }
-  message?: string
+type ErrorPayload = TwoFactorErrorPayload
+
+type QueuedRequest = {
+  resolve: (value: AxiosResponse | PromiseLike<AxiosResponse>) => void
+  reject: (reason?: unknown) => void
+  config: InternalAxiosRequestConfig
 }
 
 /**
@@ -48,7 +51,7 @@ service.interceptors.request.use(
 
 // Queue to hold pending requests while 2FA is in progress
 let isVerifying2FA = false
-let requestQueue: { resolve: (value: any) => void; reject: (reason?: any) => void; config: any }[] = []
+let requestQueue: QueuedRequest[] = []
 
 const processQueue = () => {
   requestQueue.forEach(({ resolve, config }) => {
@@ -57,7 +60,7 @@ const processQueue = () => {
   requestQueue = []
 }
 
-const rejectQueue = (error: any) => {
+const rejectQueue = (error: unknown) => {
   requestQueue.forEach(({ reject }) => reject(error))
   requestQueue = []
 }
@@ -72,32 +75,13 @@ service.interceptors.response.use(
     const data = axiosError.response?.data
     const config = axiosError.config
 
-    // Debug log to verify backend response format
-    if (import.meta.env.DEV) {
-      console.log('Axios Error Interceptor:', { status, data, url: config?.url })
-    }
-
-    // Handle 2FA requirement
-    // Expanded check to be more robust against backend response variations
-    const is2FACode = (code?: string) => code === 'REQUIRE_2FA'
-    const is2FAMessage = (msg?: string) => {
-      if (!msg) return false
-      const lower = msg.toLowerCase()
-      return lower.includes('2fa') || lower.includes('otp') || lower.includes('验证码') || lower.includes('双因素')
-    }
-
-    const is2FARequired = status === 403 && (
-      is2FACode(data?.code) ||
-      is2FACode((data?.error as any)?.code) ||
-      is2FAMessage(data?.message) ||
-      is2FAMessage(data?.error?.message)
-    )
+    const is2FARequired = isTwoFactorRequired(status, data)
 
     if (is2FARequired && config) {
 
       // If 2FA validation is already in progress, queue this request
       if (isVerifying2FA) {
-        return new Promise((resolve, reject) => {
+        return new Promise<AxiosResponse>((resolve, reject) => {
           requestQueue.push({ resolve, reject, config })
         })
       }
@@ -106,14 +90,14 @@ service.interceptors.response.use(
 
       try {
         const { value: otpCode } = await ElMessageBox.prompt(
-          data?.message || '检测到异常/新环境登录，需要双因素认证。',
-          '安全验证',
+          data?.message || t('auth.twoFactorRequired'),
+          t('auth.twoFactorTitle'),
           {
-            confirmButtonText: '验证',
-            cancelButtonText: '取消',
+            confirmButtonText: t('auth.twoFactorConfirm'),
+            cancelButtonText: t('buttons.cancel'),
             inputPattern: /^\d{6}$/,
-            inputErrorMessage: '格式不正确，请输入6位数字',
-            inputPlaceholder: '请输入 Authenticator App 上的 6 位数字',
+            inputErrorMessage: t('auth.twoFactorInvalid'),
+            inputPlaceholder: t('auth.twoFactorPlaceholder'),
             closeOnClickModal: false,
             closeOnPressEscape: false
           }
@@ -135,7 +119,7 @@ service.interceptors.response.use(
         rejectQueue(e) // Clear queue
 
         if (e !== 'cancel') {
-          ElMessage.error('验证失败或输入取消')
+          ElMessage.error(t('auth.twoFactorFailed'))
         }
         return Promise.reject(error)
       }

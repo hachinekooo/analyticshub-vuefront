@@ -19,45 +19,58 @@
               <el-icon class="el-icon--left"><TrendCharts /></el-icon>
               {{ t('nav.metrics') }}
             </el-button>
+            <el-button :type="isSemanticRoute ? 'primary' : 'default'" @click="goSemantics">
+              <el-icon class="el-icon--left"><CollectionTag /></el-icon>
+              {{ t('nav.semantics') }}
+            </el-button>
             <el-button :type="isPrivacyRoute ? 'primary' : 'default'" @click="goPrivacyRequests">
               <el-icon class="el-icon--left"><Tickets /></el-icon>
               {{ t('nav.privacyRequests') }}
             </el-button>
           </el-button-group>
           <div class="custom-segmented-control">
-            <div 
+            <button
+              type="button"
               class="segment-item" 
               :class="{ 'is-active': activeSpace === 'operations' }"
+              :aria-pressed="activeSpace === 'operations'"
               @click="activeSpace = 'operations'"
             >
               {{ t('metrics.spaces.operations') }}
-            </div>
-            <div 
+            </button>
+            <button
+              type="button"
               class="segment-item" 
               :class="{ 'is-active': activeSpace === 'technical' }"
+              :aria-pressed="activeSpace === 'technical'"
               @click="activeSpace = 'technical'"
             >
               {{ t('metrics.spaces.technical') }}
-            </div>
+            </button>
           </div>
           <div class="divider-vertical"></div>
           <LanguageToggle />
           
           <el-tooltip :content="t('metrics.resetLayout')" placement="top">
-            <el-button @click="resetToDefaultLayout" circle plain>
+            <el-button :aria-label="t('metrics.resetLayout')" @click="resetToDefaultLayout" circle plain>
               <el-icon><Brush /></el-icon>
             </el-button>
           </el-tooltip>
 
           <el-tooltip :content="t('buttons.refresh')" placement="top">
-            <el-button type="primary" :loading="refreshing" @click="refreshAll" circle plain>
+            <el-button :aria-label="t('buttons.refresh')" type="primary" :loading="refreshing" @click="refreshAll" circle plain>
               <el-icon><Refresh /></el-icon>
             </el-button>
           </el-tooltip>
 
           <el-tooltip :content="t('buttons.edit')" placement="top">
-            <el-button @click="isLayoutEditable = !isLayoutEditable" :type="isLayoutEditable ? 'warning' : 'default'" circle plain>
+            <el-button :aria-label="t('buttons.edit')" @click="isLayoutEditable = !isLayoutEditable" :type="isLayoutEditable ? 'warning' : 'default'" circle plain>
               <el-icon><Setting /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip v-if="isLayoutEditable" :content="t('metrics.saveDashboard')" placement="top">
+            <el-button :aria-label="t('metrics.saveDashboard')" type="success" :loading="dashboardSaving" circle plain @click="saveServerDashboard">
+              <el-icon><Finished /></el-icon>
             </el-button>
           </el-tooltip>
         </div>
@@ -84,9 +97,6 @@
           <el-select v-model="filters.granularity" style="width: 100px" v-if="activeSpace === 'operations'">
             <el-option :label="t('filters.hourly')" value="hour" />
             <el-option :label="t('filters.daily')" value="day" />
-            <el-option :label="t('filters.weekly')" value="week" />
-            <el-option :label="t('filters.monthly')" value="month" />
-            <el-option :label="t('filters.yearly')" value="year" />
           </el-select>
           
           <template v-if="activeSpace === 'technical'">
@@ -98,6 +108,27 @@
              </el-select>
           </template>
         </el-form>
+      </div>
+
+      <div v-if="isLayoutEditable" class="widget-palette">
+        <span>{{ t('metrics.layoutEditingHint') }}</span>
+        <el-dropdown :disabled="availableWidgetTypes.length === 0" @command="addWidgetType">
+          <el-button type="primary" plain>
+            <el-icon class="el-icon--left"><Plus /></el-icon>
+            {{ t('metrics.addWidget') }}
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="widget in availableWidgetTypes"
+                :key="widget.type"
+                :command="widget.type"
+              >
+                {{ widget.label }}
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
 
@@ -132,8 +163,8 @@
               <!-- Widget Header with Actions -->
               <div class="widget-header-bar" v-if="isLayoutEditable">
                  <span class="widget-drag-handle"><el-icon><Rank /></el-icon></span>
-                 <span class="widget-label">{{ getWidgetLabel(item.i) }}</span>
-                 <el-button size="small" link type="danger" @click="removeWidget(item.i)">
+                 <span class="widget-label">{{ getWidgetLabel(item) }}</span>
+                 <el-button :aria-label="t('buttons.delete')" size="small" link type="danger" @click="removeWidget(item.i)">
                    <el-icon><Close /></el-icon>
                  </el-button>
               </div>
@@ -141,7 +172,10 @@
               <!-- Widget Content Overlay -->
               <div class="widget-inner">
                 <!-- Overview Widget -->
-                <div v-if="item.i.startsWith('overview')" class="widget-content" v-loading="overviewLoading">
+                <div v-if="isWidgetType(item, 'core.overview')" class="widget-content" v-loading="overviewLoading">
+                  <div v-if="hasCustomWidgetTitle(item)" class="widget-header">
+                    <span>{{ getWidgetLabel(item) }}</span>
+                  </div>
                   <div v-if="overview" class="overview-grid-compact">
                     <div v-for="(val, label) in overviewItems" :key="label" class="overview-mini-card">
                        <p class="mini-label">{{ label }}</p>
@@ -152,66 +186,104 @@
                 </div>
 
                 <!-- Trends Widget -->
-                <div v-else-if="item.i.startsWith('trends')" class="widget-content" v-loading="trendsLoading">
+                <div v-else-if="isWidgetType(item, 'core.trends')" class="widget-content" v-loading="trendsLoading">
                    <div class="widget-header">
-                      <span>{{ t('metrics.trends') }}</span>
+                      <span>{{ getWidgetLabel(item) }}</span>
                    </div>
                    <div :id="'chart-business-' + item.i" class="echart-container"></div>
                 </div>
 
                 <!-- Top Events Widget -->
-                <div v-else-if="item.i.startsWith('topEvents')" class="widget-content" v-loading="topEventsLoading">
+                <div v-else-if="isWidgetType(item, 'core.topEvents')" class="widget-content" v-loading="topEventsLoading">
                    <div class="widget-header">
-                      <span>{{ t('metrics.topEvents') }}</span>
+                      <span>{{ getWidgetLabel(item) }}</span>
                    </div>
                    <el-table :data="topEvents?.items || []" size="small" style="width: 100%">
-                      <el-table-column prop="eventType" :label="t('tables.eventType')" min-width="120" show-overflow-tooltip />
+                      <el-table-column :label="t('tables.eventType')" min-width="160" show-overflow-tooltip>
+                        <template #default="{ row }">
+                          <div>{{ eventDisplayName(row.eventType) }}</div>
+                          <code v-if="eventDisplayName(row.eventType) !== row.eventType">{{ row.eventType }}</code>
+                        </template>
+                      </el-table-column>
                       <el-table-column prop="count" :label="t('tables.count')" min-width="120" />
                    </el-table>
                 </div>
 
-                <!-- Traffic Trends Widget -->
-                <div v-else-if="item.i.startsWith('trafficTrends')" class="widget-content" v-loading="trafficTrendsLoading">
+                <!-- Product Funnel Widget -->
+                <div v-else-if="isWidgetType(item, 'core.productFunnel')" class="widget-content" v-loading="productFunnelLoading">
                    <div class="widget-header">
-                      <span>{{ t('metrics.chart.pageViews') }} / {{ t('metrics.chart.visitors') }}</span>
+                      <span>{{ getWidgetLabel(item) }}</span>
+                   </div>
+                   <el-empty v-if="!dashboardAnalyticsConfig.funnel" :description="t('metrics.notConfigured')" :image-size="60" />
+                   <el-table v-else :data="productFunnelRows" size="small" style="width: 100%">
+                      <el-table-column prop="groupKey" :label="t('tables.group')" min-width="140" show-overflow-tooltip />
+                      <el-table-column prop="step" :label="t('tables.step')" min-width="180" show-overflow-tooltip />
+                      <el-table-column prop="users" :label="t('tables.users')" min-width="90" />
+                      <el-table-column prop="conversionRate" :label="t('tables.conversion')" min-width="110">
+                        <template #default="{ row }">{{ formatPercent(row.conversionRate) }}</template>
+                      </el-table-column>
+                      <el-table-column prop="dropOffRate" :label="t('tables.dropOff')" min-width="100">
+                        <template #default="{ row }">{{ formatPercent(row.dropOffRate) }}</template>
+                      </el-table-column>
+                   </el-table>
+                </div>
+
+                <!-- Retention Widget -->
+                <div v-else-if="isWidgetType(item, 'core.retention')" class="widget-content" v-loading="retentionLoading">
+                   <div class="widget-header">
+                      <span>{{ getWidgetLabel(item) }}</span>
+                   </div>
+                   <el-empty v-if="!dashboardAnalyticsConfig.retention" :description="t('metrics.notConfigured')" :image-size="60" />
+                   <template v-else>
+                   <div class="retention-summary">
+                     <span>{{ t('tables.cohortUsers') }}</span>
+                     <strong>{{ formatNumber(retention?.cohortUsers || 0) }}</strong>
+                   </div>
+                   <el-table :data="retention?.buckets || []" size="small" style="width: 100%">
+                      <el-table-column prop="day" :label="t('tables.day')" min-width="80">
+                        <template #default="{ row }">D{{ row.day }}</template>
+                      </el-table-column>
+                      <el-table-column prop="retainedUsers" :label="t('tables.users')" min-width="100" />
+                      <el-table-column prop="retentionRate" :label="t('tables.retention')" min-width="110">
+                        <template #default="{ row }">{{ formatPercent(row.retentionRate) }}</template>
+                      </el-table-column>
+                   </el-table>
+                   </template>
+                </div>
+
+                <!-- Traffic Trends Widget -->
+                <div v-else-if="isWidgetType(item, 'core.trafficTrends')" class="widget-content" v-loading="trafficTrendsLoading">
+                   <div class="widget-header">
+                      <span>{{ getWidgetLabel(item) }}</span>
                    </div>
                    <div :id="'chart-traffic-' + item.i" class="echart-container"></div>
                 </div>
                 
                 <!-- Rankings Widget -->
-                 <div v-else-if="item.i.startsWith('rankings')" class="widget-content">
+                 <div v-else-if="isWidgetType(item, 'core.topPages')" class="widget-content">
                    <div class="widget-header">
-                      <span>{{ t('metrics.topPages') }}</span>
+                      <span>{{ getWidgetLabel(item) }}</span>
                    </div>
                    <el-table :data="topPages" size="small" style="width: 100%">
-                      <el-table-column prop="pagePath" :label="t('tables.page')" min-width="120" show-overflow-tooltip />
+                      <el-table-column prop="key" :label="t('tables.page')" min-width="120" show-overflow-tooltip />
                       <el-table-column prop="count" :label="t('tables.count')" min-width="120" />
                    </el-table>
                 </div>
 
                 <!-- Counters Widget -->
-                <div v-else-if="item.i.startsWith('counters')" class="widget-content" v-loading="countersLoading">
-                   <div class="widget-header">
-                      <span>{{ t('metrics.counters') }}</span>
-                   </div>
-                   <el-table :data="counters" size="small" style="width: 100%">
-                      <el-table-column prop="key" :label="t('tables.key')" min-width="120" show-overflow-tooltip />
-                      <el-table-column prop="value" :label="t('tables.value')" min-width="120" />
-                      <el-table-column :label="t('buttons.actions')" min-width="120">
-                        <template #default="{ row }">
-                          <el-button-group>
-                            <el-button size="small" type="primary" link icon="Plus" @click="handleIncrementCounter(row)" />
-                            <el-button size="small" type="success" link icon="Edit" @click="showEditCounterDialog(row)" />
-                          </el-button-group>
-                        </template>
-                      </el-table-column>
-                   </el-table>
-                </div>
+                <CounterWidget
+                  v-else-if="isWidgetType(item, 'core.counters')"
+                  class="widget-content"
+                  :project-id="filters.projectId"
+                  :title="getWidgetLabel(item)"
+                  :configured-keys="configForWidget('core.counters').keys"
+                  :refresh-token="extensionRefreshToken"
+                />
 
                 <!-- Traffic Table Widget -->
-                <div v-else-if="item.i.startsWith('traffic')" class="widget-content" v-loading="trafficLoading">
+                <div v-else-if="isWidgetType(item, 'core.traffic')" class="widget-content" v-loading="trafficLoading">
                    <div class="widget-header">
-                      <span>{{ t('metrics.traffic') }}</span>
+                      <span>{{ getWidgetLabel(item) }}</span>
                    </div>
                    <el-table :data="traffic.items" size="small" style="width: 100%">
                       <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="120" show-overflow-tooltip />
@@ -223,7 +295,7 @@
                    </el-table>
                    <div class="widget-footer-mini">
                       <el-pagination
-                        small
+                        size="small"
                         layout="prev, pager, next"
                         :total="traffic.total"
                         :page-size="traffic.pageSize"
@@ -234,12 +306,17 @@
                 </div>
 
                 <!-- Events Table Widget -->
-                <div v-else-if="item.i.startsWith('events')" class="widget-content" v-loading="eventsLoading">
+                <div v-else-if="isWidgetType(item, 'core.events')" class="widget-content" v-loading="eventsLoading">
                    <div class="widget-header">
-                      <span>{{ t('metrics.events') }}</span>
+                      <span>{{ getWidgetLabel(item) }}</span>
                    </div>
                    <el-table :data="events.items" size="small" style="width: 100%">
-                      <el-table-column prop="eventType" :label="t('tables.eventType')" min-width="120" show-overflow-tooltip />
+                      <el-table-column :label="t('tables.eventType')" min-width="160" show-overflow-tooltip>
+                        <template #default="{ row }">
+                          <div>{{ eventDisplayName(row.eventType) }}</div>
+                          <code v-if="eventDisplayName(row.eventType) !== row.eventType">{{ row.eventType }}</code>
+                        </template>
+                      </el-table-column>
                       <el-table-column prop="eventTimestamp" :label="t('tables.eventTime')" min-width="160">
                          <template #default="{ row }">{{ formatTimestamp(row.eventTimestamp) }}</template>
                       </el-table-column>
@@ -250,7 +327,7 @@
                    </el-table>
                    <div class="widget-footer-mini">
                       <el-pagination
-                        small
+                        size="small"
                         layout="prev, pager, next"
                         :total="events.total"
                         :page-size="events.pageSize"
@@ -261,9 +338,9 @@
                 </div>
 
                 <!-- Devices Table Widget -->
-                <div v-else-if="item.i.startsWith('devices')" class="widget-content" v-loading="devicesLoading">
+                <div v-else-if="isWidgetType(item, 'core.devices')" class="widget-content" v-loading="devicesLoading">
                    <div class="widget-header">
-                      <span>{{ t('metrics.devices') }}</span>
+                      <span>{{ getWidgetLabel(item) }}</span>
                    </div>
                    <el-table :data="devices.items" size="small" style="width: 100%">
                       <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="120" show-overflow-tooltip />
@@ -284,7 +361,7 @@
                    </el-table>
                    <div class="widget-footer-mini">
                       <el-pagination
-                        small
+                        size="small"
                         layout="prev, pager, next"
                         :total="devices.total"
                         :page-size="devices.pageSize"
@@ -295,9 +372,9 @@
                 </div>
 
                 <!-- Sessions Table Widget -->
-                <div v-else-if="item.i.startsWith('sessions')" class="widget-content" v-loading="sessionsLoading">
+                <div v-else-if="isWidgetType(item, 'core.sessions')" class="widget-content" v-loading="sessionsLoading">
                    <div class="widget-header">
-                      <span>{{ t('metrics.sessions') }}</span>
+                      <span>{{ getWidgetLabel(item) }}</span>
                    </div>
                    <el-table :data="sessions.items" size="small" style="width: 100%">
                       <el-table-column prop="sessionId" :label="t('tables.sessionId')" min-width="120" show-overflow-tooltip />
@@ -308,7 +385,7 @@
                    </el-table>
                    <div class="widget-footer-mini">
                       <el-pagination
-                        small
+                        size="small"
                         layout="prev, pager, next"
                         :total="sessions.total"
                         :page-size="sessions.pageSize"
@@ -317,42 +394,157 @@
                       />
                    </div>
                 </div>
+
+                <!-- Trusted build-time extension widget -->
+                <div v-else-if="extensionForWidget(item)" class="widget-content">
+                  <div class="widget-header">
+                    <span>{{ getWidgetLabel(item) }}</span>
+                  </div>
+                  <component
+                    :is="extensionComponent(item)"
+                    :project-id="filters.projectId"
+                    :widget-id="item.i"
+                    :config="extensionConfig(item)"
+                    :date-range="extensionDateRange"
+                    :locale="locale"
+                    :editable="isLayoutEditable"
+                    :refresh-token="extensionRefreshToken"
+                    @update:config="updateExtensionWidgetConfig(item, $event)"
+                  />
+                </div>
+
+                <el-empty v-else :description="t('metrics.dashboardUnsupportedWidget')" :image-size="60" />
               </div>
             </div>
           </grid-item>
         </grid-layout>
       </div>
 
-    <!-- Counter Edit Dialog -->
-    <el-dialog v-model="counterDialogVisible" :title="t('metrics.counters')" width="400px">
-      <el-form :model="counterForm" label-position="top">
-        <el-form-item :label="t('tables.key')">
-          <el-input v-model="counterForm.key" disabled />
+    <el-dialog
+      v-model="widgetConfigDialogVisible"
+      :title="t('metrics.widgetConfig.dialogTitle', { widget: pendingWidgetLabel })"
+      width="620px"
+    >
+      <el-form :model="widgetConfigForm" label-position="top">
+        <el-form-item :label="t('metrics.widgetConfig.customTitle')">
+          <el-input
+            v-model="widgetConfigForm.title"
+            maxlength="100"
+            clearable
+            :placeholder="t('metrics.widgetConfig.customTitlePlaceholder')"
+          />
         </el-form-item>
-        <el-form-item :label="t('tables.value')">
-          <el-input-number v-model="counterForm.value" style="width: 100%" />
-        </el-form-item>
-        <el-form-item :label="t('tables.isPublic')">
-          <el-switch v-model="counterForm.isPublic" />
-        </el-form-item>
+
+        <template v-if="widgetConfigType === 'core.productFunnel'">
+          <el-form-item :label="t('metrics.widgetConfig.funnelSteps')" required>
+            <el-select
+              v-model="widgetConfigForm.funnelSteps"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              style="width: 100%"
+              :placeholder="t('metrics.widgetConfig.funnelStepsPlaceholder')"
+            >
+              <el-option
+                v-for="eventType in dashboardEventTypeOptions"
+                :key="eventType"
+                :label="eventType"
+                :value="eventType"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('metrics.widgetConfig.groupBy')">
+            <el-input
+              v-model="widgetConfigForm.groupBy"
+              maxlength="80"
+              clearable
+              :placeholder="t('metrics.widgetConfig.groupByPlaceholder')"
+            />
+          </el-form-item>
+        </template>
+
+        <template v-else-if="widgetConfigType === 'core.retention'">
+          <el-form-item :label="t('metrics.widgetConfig.cohortEvent')" required>
+            <el-select
+              v-model="widgetConfigForm.cohortEvent"
+              filterable
+              allow-create
+              default-first-option
+              style="width: 100%"
+              :placeholder="t('metrics.widgetConfig.eventPlaceholder')"
+            >
+              <el-option
+                v-for="eventType in dashboardEventTypeOptions"
+                :key="eventType"
+                :label="eventType"
+                :value="eventType"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('metrics.widgetConfig.returnEvent')" required>
+            <el-select
+              v-model="widgetConfigForm.returnEvent"
+              filterable
+              allow-create
+              default-first-option
+              style="width: 100%"
+              :placeholder="t('metrics.widgetConfig.eventPlaceholder')"
+            >
+              <el-option
+                v-for="eventType in dashboardEventTypeOptions"
+                :key="eventType"
+                :label="eventType"
+                :value="eventType"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('metrics.widgetConfig.retentionDays')" required>
+            <el-input
+              v-model="widgetConfigForm.retentionDaysText"
+              :placeholder="t('metrics.widgetConfig.retentionDaysPlaceholder')"
+            />
+          </el-form-item>
+        </template>
       </el-form>
       <template #footer>
-        <el-button @click="counterDialogVisible = false">{{ t('buttons.cancel') }}</el-button>
-        <el-button type="primary" @click="handleSaveCounter">{{ t('buttons.save') }}</el-button>
+        <el-button @click="widgetConfigDialogVisible = false">{{ t('buttons.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmConfiguredWidget">{{ t('metrics.addWidget') }}</el-button>
       </template>
     </el-dialog>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import * as echarts from 'echarts'
+import { computed, nextTick, onMounted, onUnmounted, reactive, readonly, ref, watch } from 'vue'
+import { LineChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { init, use, type ECharts } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
 import { useI18n } from '@/i18n'
 import { GridLayout, GridItem } from 'vue3-grid-layout-next'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import LanguageToggle from '@/components/LanguageToggle.vue'
+import CounterWidget from '@/features/counters/CounterWidget.vue'
+import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import {
+  getDashboardWidgetExtension,
+  getDashboardWidgetExtensions,
+  normalizeDashboardExtensionConfig,
+  type DashboardExtensionConfig,
+  type DashboardWidgetExtension,
+} from '@/extensions/dashboard'
 import { getProjects, type Project } from '@/api/admin'
+import { getEventCatalog, type EventCatalogEntry } from '@/api/semantic'
+import {
+  getProjectDashboards,
+  upsertProjectDashboard,
+  type AdminDashboard,
+  type DashboardDefinition,
+  type DashboardWidgetDefinition,
+} from '@/api/dashboard'
 import {
   Brush,
   Refresh,
@@ -372,8 +564,7 @@ import {
   getTrafficTrends,
   getTopPages,
   getTopReferrers,
-  incrementCounter,
-  setCounter,
+  getCounterEventTypes,
   type MetricsOverview,
   type MetricsTopEvents,
   type MetricsTrends,
@@ -383,28 +574,46 @@ import {
   type SessionRecord,
   type TrafficMetricRecord,
   type TrafficSummary,
-  type CounterItem,
+  type MetricsGranularity,
+  type TrafficGranularity,
   type TrafficTrends,
   type TopPageItem,
   type TopReferrerItem,
-  getCounters,
+  getProductFunnel,
+  getProductRetention,
+  type FunnelResponse,
+  type RetentionResponse,
 } from '@/api/metrics'
 
-// --- 1. Types & Interfaces ---
-type ErrorPayload = {
-  error?: { message?: string }
-  message?: string
-}
+use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
+// --- 1. Types & Interfaces ---
 interface DashboardItem {
   x: number;
   y: number;
   w: number;
   h: number;
   i: string;
+  type?: string;
+  config?: Record<string, unknown>;
   minW?: number;
   minH?: number;
 }
+
+interface DashboardAnalyticsConfig {
+  funnel?: {
+    steps: string[]
+    groupBy?: string
+  }
+  retention?: {
+    cohortEvent: string
+    returnEvent: string
+    days: number[]
+  }
+}
+
+type DashboardSpace = 'operations' | 'technical'
+type ConfigurableAnalyticsWidgetType = 'core.productFunnel' | 'core.retention'
 
 // --- 2. State & Basic Setup ---
 const route = useRoute()
@@ -412,9 +621,11 @@ const router = useRouter()
 const { t, locale } = useI18n()
 
 const isProjectsRoute = computed(() => route.path === '/')
+const isSemanticRoute = computed(() => route.path === '/semantics')
 const isPrivacyRoute = computed(() => route.path === '/privacy-requests')
 const goProjects = () => router.push('/')
-const goPrivacyRequests = () => router.push('/privacy-requests')
+const goSemantics = () => router.push({ path: '/semantics', query: filters.projectId ? { projectId: filters.projectId } : {} })
+const goPrivacyRequests = () => router.push({ path: '/privacy-requests', query: filters.projectId ? { projectId: filters.projectId } : {} })
 
 const routeProjectId = computed(() => {
   const value = route.query.projectId
@@ -424,14 +635,16 @@ const routeProjectId = computed(() => {
 const projects = ref<Project[]>([])
 const refreshing = ref(false)
 const isLayoutEditable = ref(false)
-const activeSpace = ref<'operations' | 'technical'>('operations')
+const activeSpace = ref<DashboardSpace>('operations')
 const dashboardLayout = ref<DashboardItem[]>([])
+const serverDashboards = ref<AdminDashboard[]>([])
+const dashboardSaving = ref(false)
 
 // Filters & Params
 const filters = reactive({
   projectId: import.meta.env.VITE_DEFAULT_PROJECT_ID || '',
   dateRange: null as string[] | null,
-  granularity: 'day' as 'day' | 'hour' | 'week' | 'month' | 'year',
+  granularity: 'day' as MetricsGranularity,
   topEventsLimit: 10,
   eventType: '',
   userId: '',
@@ -442,6 +655,71 @@ const filters = reactive({
   metricType: '',
   platform: 'web' as 'web' | 'app',
 })
+const extensionDateRange = computed<readonly [string, string] | null>(() =>
+  Array.isArray(filters.dateRange) && filters.dateRange.length === 2
+    ? [filters.dateRange[0]!, filters.dateRange[1]!] as const
+    : null,
+)
+const extensionRefreshToken = ref(0)
+
+type MetricsRequestSnapshot = Readonly<{
+  dateRange: readonly string[] | null
+  granularity: MetricsGranularity
+  topEventsLimit: number
+  eventType: string
+  userId: string
+  deviceId: string
+  sessionId: string
+  apiKey: string
+  isBanned: string
+  metricType: string
+  platform: 'web' | 'app'
+  eventsPage: number
+  devicesPage: number
+  sessionsPage: number
+  trafficPage: number
+}>
+
+type ProjectRequestContext = {
+  projectId: string
+  projectGeneration: number
+  requestGeneration: number
+  snapshot: MetricsRequestSnapshot
+}
+let projectContextGeneration = 0
+let metricsRequestGeneration = 0
+const captureMetricsSnapshot = (): MetricsRequestSnapshot => ({
+  dateRange: Array.isArray(filters.dateRange) ? [...filters.dateRange] : null,
+  granularity: filters.granularity,
+  topEventsLimit: filters.topEventsLimit,
+  eventType: filters.eventType,
+  userId: filters.userId,
+  deviceId: filters.deviceId,
+  sessionId: filters.sessionId,
+  apiKey: filters.apiKey,
+  isBanned: filters.isBanned,
+  metricType: filters.metricType,
+  platform: filters.platform,
+  eventsPage: events.page,
+  devicesPage: devices.page,
+  sessionsPage: sessions.page,
+  trafficPage: traffic.page,
+})
+const captureProjectContext = (): ProjectRequestContext => ({
+  projectId: filters.projectId,
+  projectGeneration: projectContextGeneration,
+  requestGeneration: metricsRequestGeneration,
+  snapshot: captureMetricsSnapshot(),
+})
+const beginRefreshContext = () => {
+  metricsRequestGeneration += 1
+  return captureProjectContext()
+}
+const isCurrentProjectScope = (context: ProjectRequestContext) =>
+  context.projectGeneration === projectContextGeneration
+  && context.projectId === filters.projectId
+const isCurrentProjectContext = (context: ProjectRequestContext) =>
+  isCurrentProjectScope(context) && context.requestGeneration === metricsRequestGeneration
 
 // Metrics Data Collections
 const overview = ref<MetricsOverview | null>(null)
@@ -451,7 +729,10 @@ const trafficTrends = ref<TrafficTrends | null>(null)
 const topPages = ref<TopPageItem[]>([])
 const topReferrers = ref<TopReferrerItem[]>([])
 const trafficSummary = ref<TrafficSummary | null>(null)
-const counters = ref<CounterItem[]>([])
+const productFunnel = ref<FunnelResponse | null>(null)
+const retention = ref<RetentionResponse | null>(null)
+const dashboardAnalyticsConfig = ref<DashboardAnalyticsConfig>({})
+const semanticEventCatalog = ref<EventCatalogEntry[]>([])
 
 // Paged Results
 const events = reactive<PagedResult<EventRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
@@ -460,11 +741,23 @@ const sessions = reactive<PagedResult<SessionRecord>>({ projectId: '', rangeStar
 const traffic = reactive<PagedResult<TrafficMetricRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
 
 // Dialogs & Form
-const counterDialogVisible = ref(false)
-const counterForm = reactive({ key: '', value: 0, isPublic: true })
+const counterEventTypes = ref<string[]>([])
+const widgetConfigDialogVisible = ref(false)
+const widgetConfigType = ref<ConfigurableAnalyticsWidgetType | ''>('')
+const widgetConfigForm = reactive({
+  title: '',
+  funnelSteps: [] as string[],
+  groupBy: '',
+  cohortEvent: '',
+  returnEvent: '',
+  retentionDaysText: '1, 7, 30',
+})
+const dashboardEventTypeOptions = computed(() => Array.from(new Set([
+  ...counterEventTypes.value,
+  ...semanticEventCatalog.value.map((entry) => entry.rawKey),
+])).sort())
 
 // Loading States
-const countersLoading = ref(false)
 const overviewLoading = ref(false)
 const trendsLoading = ref(false)
 const topEventsLoading = ref(false)
@@ -475,24 +768,44 @@ const trafficLoading = ref(false)
 const trafficTrendsLoading = ref(false)
 const topPagesLoading = ref(false)
 const topReferrersLoading = ref(false)
+const productFunnelLoading = ref(false)
+const retentionLoading = ref(false)
 
 // --- 3. Utility Functions ---
-const getErrorMessage = (err: unknown, fallback: string) => {
-  const e = err as { response?: { data?: ErrorPayload } }
-  return e.response?.data?.error?.message || fallback
-}
-
 const cleanParams = <T extends Record<string, unknown>>(params: T): T => {
   return Object.fromEntries(
     Object.entries(params).filter(([, value]) => value !== '' && value !== undefined && value !== null)
   ) as T
 }
 
-const rangeParams = () => {
-  if (Array.isArray(filters.dateRange) && filters.dateRange.length === 2) {
-    return { from: filters.dateRange[0], to: filters.dateRange[1] }
+const rangeParams = (snapshot: MetricsRequestSnapshot = captureMetricsSnapshot()) => {
+  if (Array.isArray(snapshot.dateRange) && snapshot.dateRange.length === 2) {
+    return { from: snapshot.dateRange[0], to: snapshot.dateRange[1] }
   }
   return {}
+}
+
+const semanticEventByRawKey = computed(() => {
+  const entries = new Map<string, EventCatalogEntry>()
+  for (const entry of semanticEventCatalog.value) {
+    entries.set(entry.rawKey, entry)
+    if (entry.mapped && entry.semanticKey && !entries.has(entry.semanticKey)) {
+      entries.set(entry.semanticKey, entry)
+    }
+  }
+  return entries
+})
+
+const eventDisplayName = (rawKey: string) => {
+  const names = semanticEventByRawKey.value.get(rawKey)?.displayName
+  if (!names) return rawKey
+  const preferred = locale.value === 'zh'
+    ? ['zh-CN', 'zh', 'default', 'en']
+    : ['en', 'default', 'zh-CN', 'zh']
+  for (const key of preferred) {
+    if (names[key]) return names[key]
+  }
+  return Object.values(names)[0] || rawKey
 }
 
 const requireProject = () => {
@@ -503,32 +816,66 @@ const requireProject = () => {
   return true
 }
 // --- 4. Layout Management ---
-const defaultLayouts: Record<'operations' | 'technical', DashboardItem[]> = {
+const defaultLayouts: Record<DashboardSpace, DashboardItem[]> = {
   operations: [
-    { x: 0, y: 0, w: 12, h: 4, i: 'overview_default' , minW: 6, minH: 3 },
-    { x: 0, y: 4, w: 8, h: 10, i: 'trends_default' , minW: 4, minH: 6 },
-    { x: 8, y: 4, w: 4, h: 10, i: 'topEvents_default' , minW: 3, minH: 6 },
-    { x: 0, y: 14, w: 6, h: 10, i: 'trafficTrends_default' , minW: 4, minH: 6 },
-    { x: 6, y: 14, w: 6, h: 10, i: 'rankings_default' , minW: 4, minH: 6 },
-    { x: 0, y: 24, w: 12, h: 8, i: 'counters_default' , minW: 4, minH: 4 },
+    { x: 0, y: 0, w: 12, h: 4, i: 'overview_default', type: 'core.overview', minW: 6, minH: 3 },
+    { x: 0, y: 4, w: 8, h: 10, i: 'trends_default', type: 'core.trends', minW: 4, minH: 6 },
+    { x: 8, y: 4, w: 4, h: 10, i: 'topEvents_default', type: 'core.topEvents', minW: 3, minH: 6 },
+    { x: 0, y: 14, w: 6, h: 10, i: 'trafficTrends_default', type: 'core.trafficTrends', minW: 4, minH: 6 },
+    { x: 6, y: 14, w: 6, h: 10, i: 'rankings_default', type: 'core.topPages', minW: 4, minH: 6 },
+    { x: 0, y: 24, w: 12, h: 8, i: 'counters_default', type: 'core.counters', minW: 4, minH: 4 },
   ],
   technical: [
-    { x: 0, y: 0, w: 6, h: 12, i: 'events_default', minW: 4, minH: 8 },
-    { x: 6, y: 0, w: 6, h: 12, i: 'traffic_default', minW: 4, minH: 8 },
-    { x: 0, y: 12, w: 6, h: 10, i: 'devices_default', minW: 4, minH: 6 },
-    { x: 6, y: 12, w: 6, h: 10, i: 'sessions_default', minW: 4, minH: 6 },
+    { x: 0, y: 0, w: 6, h: 12, i: 'events_default', type: 'core.events', minW: 4, minH: 8 },
+    { x: 6, y: 0, w: 6, h: 12, i: 'traffic_default', type: 'core.traffic', minW: 4, minH: 8 },
+    { x: 0, y: 12, w: 6, h: 10, i: 'devices_default', type: 'core.devices', minW: 4, minH: 6 },
+    { x: 6, y: 12, w: 6, h: 10, i: 'sessions_default', type: 'core.sessions', minW: 4, minH: 6 },
   ],
 }
 
-const getWidgetLabel = (id: string) => {
-  const type = id.split('_')[0]
-  if (type === 'trafficTrends') return t('metrics.chart.pageViews')
-  if (type === 'rankings') return t('metrics.topPages')
-  return t(`metrics.${type}`)
+const widgetTemplates: Record<DashboardSpace, DashboardItem[]> = {
+  operations: [
+    ...defaultLayouts.operations,
+    { x: 0, y: 0, w: 12, h: 10, i: 'productFunnel_template', type: 'core.productFunnel', minW: 6, minH: 6 },
+    { x: 0, y: 0, w: 6, h: 10, i: 'retention_template', type: 'core.retention', minW: 4, minH: 6 },
+  ],
+  technical: [...defaultLayouts.technical],
 }
 
+const widgetLabelKeys: Record<string, string> = {
+  'core.overview': 'metrics.overview',
+  'core.trends': 'metrics.trends',
+  'core.topEvents': 'metrics.topEvents',
+  'core.productFunnel': 'metrics.productFunnel',
+  'core.retention': 'metrics.retention',
+  'core.trafficTrends': 'metrics.trafficTrends',
+  'core.topPages': 'metrics.topPages',
+  'core.counters': 'metrics.counters',
+  'core.events': 'metrics.events',
+  'core.devices': 'metrics.devices',
+  'core.sessions': 'metrics.sessions',
+  'core.traffic': 'metrics.traffic',
+}
+
+const pendingWidgetLabel = computed(() => {
+  const key = widgetConfigType.value ? widgetLabelKeys[widgetConfigType.value] : ''
+  return key ? t(key) : ''
+})
+
 const removeWidget = (id: string) => {
+  const removed = dashboardLayout.value.find((item) => item.i === id)
+  const removedType = removed ? resolvedWidgetType(removed) : null
   dashboardLayout.value = dashboardLayout.value.filter(item => item.i !== id)
+  if (removedType === 'core.productFunnel') {
+    const next = { ...dashboardAnalyticsConfig.value }
+    delete next.funnel
+    dashboardAnalyticsConfig.value = next
+  }
+  if (removedType === 'core.retention') {
+    const next = { ...dashboardAnalyticsConfig.value }
+    delete next.retention
+    dashboardAnalyticsConfig.value = next
+  }
 }
 
 const resetToDefaultLayout = () => {
@@ -536,26 +883,532 @@ const resetToDefaultLayout = () => {
   saveLayout()
 }
 
-const saveLayout = () => {
-  if (!activeSpace.value || dashboardLayout.value.length === 0) return
-  localStorage.setItem(`dashboard_layout_${activeSpace.value}`, JSON.stringify(dashboardLayout.value))
+const availableWidgetTypes = computed(() => {
+  const present = new Set(dashboardLayout.value.map((item) => resolvedWidgetType(item)))
+  const coreWidgets = widgetTemplates[activeSpace.value]
+    .filter((item) => item.type && !present.has(item.type))
+    .map((item) => ({
+      type: item.type as string,
+      label: t(widgetLabelKeys[item.type as string] || 'metrics.dashboardUnsupportedWidget'),
+    }))
+  const extensionWidgets = getDashboardWidgetExtensions(activeSpace.value)
+    .filter((extension) => !present.has(extension.type))
+    .map((extension) => ({
+      type: extension.type,
+      label: extensionDisplayName(extension),
+    }))
+  return [...coreWidgets, ...extensionWidgets]
+})
+
+const appendExtensionWidget = (type: string) => {
+  const extension = getDashboardWidgetExtension(type)
+  if (!extension || !extension.spaces.includes(activeSpace.value)) return
+  if (dashboardLayout.value.some((item) => resolvedWidgetType(item) === type)) return
+  const nextY = dashboardLayout.value.reduce(
+    (bottom, item) => Math.max(bottom, item.y + item.h),
+    0,
+  )
+  const config = extension.defaultConfig === undefined
+    ? undefined
+    : normalizeDashboardExtensionConfig(extension, extension.defaultConfig) || undefined
+  if (extension.configRequired && config === undefined) return
+  const idPrefix = extension.type.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80)
+  dashboardLayout.value.push({
+    i: `${idPrefix}_${Date.now()}`,
+    type: extension.type,
+    x: 0,
+    y: nextY,
+    w: extension.defaultLayout.w,
+    h: extension.defaultLayout.h,
+    minW: extension.defaultLayout.minW,
+    minH: extension.defaultLayout.minH,
+    config,
+  })
 }
 
-const loadLayout = () => {
-  const saved = localStorage.getItem(`dashboard_layout_${activeSpace.value}`)
+const appendWidgetType = (type: string, config?: Record<string, unknown>) => {
+  if (dashboardLayout.value.some((item) => resolvedWidgetType(item) === type)) return
+  const template = widgetTemplates[activeSpace.value].find((item) => item.type === type)
+  if (!template) return
+  const nextY = dashboardLayout.value.reduce(
+    (bottom, item) => Math.max(bottom, item.y + item.h),
+    0,
+  )
+  dashboardLayout.value.push({
+    ...JSON.parse(JSON.stringify(template)),
+    i: `${template.i.replace(/_default$/, '')}_${Date.now()}`,
+    x: 0,
+    y: nextY,
+    config,
+  })
+  if (type === 'core.productFunnel' && Array.isArray(config?.steps)) {
+    dashboardAnalyticsConfig.value = {
+      ...dashboardAnalyticsConfig.value,
+      funnel: {
+        steps: config.steps as string[],
+        groupBy: typeof config.groupBy === 'string' ? config.groupBy : undefined,
+      },
+    }
+  }
+  if (type === 'core.retention'
+    && typeof config?.cohortEvent === 'string'
+    && typeof config.returnEvent === 'string'
+    && Array.isArray(config.days)) {
+    dashboardAnalyticsConfig.value = {
+      ...dashboardAnalyticsConfig.value,
+      retention: {
+        cohortEvent: config.cohortEvent,
+        returnEvent: config.returnEvent,
+        days: config.days as number[],
+      },
+    }
+  }
+  nextTick(() => void refreshAll())
+}
+
+const resetWidgetConfigForm = () => {
+  Object.assign(widgetConfigForm, {
+    title: '',
+    funnelSteps: [],
+    groupBy: '',
+    cohortEvent: '',
+    returnEvent: '',
+    retentionDaysText: '1, 7, 30',
+  })
+}
+
+const addWidgetType = (type: string) => {
+  if (dashboardLayout.value.some((item) => resolvedWidgetType(item) === type)) return
+  if (getDashboardWidgetExtension(type)) {
+    appendExtensionWidget(type)
+    return
+  }
+  if (type === 'core.productFunnel' || type === 'core.retention') {
+    resetWidgetConfigForm()
+    widgetConfigType.value = type
+    widgetConfigDialogVisible.value = true
+    void loadCounterEventTypeOptions()
+    return
+  }
+  appendWidgetType(type)
+}
+
+const validAnalyticsKey = (value: string, maxLength = 100) => {
+  const normalized = value.trim()
+  return normalized.length <= maxLength && /^[A-Za-z0-9_.:-]+$/.test(normalized)
+}
+
+const confirmConfiguredWidget = () => {
+  const type = widgetConfigType.value
+  if (!type) return
+  const config: Record<string, unknown> = {}
+  const title = widgetConfigForm.title.trim()
+  if (title) config.title = title
+
+  if (type === 'core.productFunnel') {
+    const steps = [...new Set(widgetConfigForm.funnelSteps.map((step) => step.trim()).filter(Boolean))]
+    if (steps.length < 2 || steps.length > 12 || steps.some((step) => !validAnalyticsKey(step))) {
+      ElMessage.warning(t('metrics.widgetConfig.invalidFunnelSteps'))
+      return
+    }
+    const groupBy = widgetConfigForm.groupBy.trim()
+    if (groupBy && !validAnalyticsKey(groupBy, 80)) {
+      ElMessage.warning(t('metrics.widgetConfig.invalidGroupBy'))
+      return
+    }
+    config.steps = steps
+    if (groupBy) config.groupBy = groupBy
+  } else {
+    const cohortEvent = widgetConfigForm.cohortEvent.trim()
+    const returnEvent = widgetConfigForm.returnEvent.trim()
+    const dayValues = widgetConfigForm.retentionDaysText
+      .split(/[\s,，]+/)
+      .filter(Boolean)
+      .map((value) => Number(value))
+    const days = [...new Set(dayValues)].sort((left, right) => left - right)
+    if (!validAnalyticsKey(cohortEvent) || !validAnalyticsKey(returnEvent)) {
+      ElMessage.warning(t('metrics.widgetConfig.invalidRetentionEvents'))
+      return
+    }
+    if (days.length < 1 || days.length > 30
+      || days.some((day) => !Number.isInteger(day) || day < 0 || day > 90)) {
+      ElMessage.warning(t('metrics.widgetConfig.invalidRetentionDays'))
+      return
+    }
+    config.cohortEvent = cohortEvent
+    config.returnEvent = returnEvent
+    config.days = days
+  }
+
+  widgetConfigDialogVisible.value = false
+  appendWidgetType(type, config)
+}
+
+const saveLayout = () => {
+  if (!filters.projectId || !layoutVisible.value) return
+  localStorage.setItem(layoutStorageKey(), JSON.stringify(dashboardLayout.value))
+}
+
+const applyServerDashboard = (dashboard: AdminDashboard) => {
+  const widgets = dashboard.definition?.widgets
+  if (!Array.isArray(widgets)) return false
+  dashboardLayout.value = widgets.map((widget) => ({
+    i: widget.id,
+    type: widget.type,
+    config: widget.config ? JSON.parse(JSON.stringify(widget.config)) : undefined,
+    x: widget.layout.x,
+    y: widget.layout.y,
+    w: widget.layout.w,
+    h: widget.layout.h,
+    minW: widget.layout.minW,
+    minH: widget.layout.minH,
+  }))
+
+  const config: DashboardAnalyticsConfig = {}
+  for (const widget of widgets) {
+    if (widget.type === 'core.productFunnel' && Array.isArray(widget.config?.steps)) {
+      const steps = widget.config.steps.filter((step): step is string => typeof step === 'string')
+      if (steps.length >= 2) {
+        config.funnel = {
+          steps,
+          groupBy: typeof widget.config.groupBy === 'string' ? widget.config.groupBy : undefined,
+        }
+      }
+    }
+    if (widget.type === 'core.retention'
+      && typeof widget.config?.cohortEvent === 'string'
+      && typeof widget.config.returnEvent === 'string'
+      && Array.isArray(widget.config.days)) {
+      config.retention = {
+        cohortEvent: widget.config.cohortEvent,
+        returnEvent: widget.config.returnEvent,
+        days: widget.config.days.filter((day): day is number => Number.isInteger(day)),
+      }
+    }
+  }
+  dashboardAnalyticsConfig.value = config
+  return true
+}
+
+const syncAnalyticsConfigFromLayout = () => {
+  const next: DashboardAnalyticsConfig = { ...dashboardAnalyticsConfig.value }
+  const funnel = dashboardLayout.value.find((item) => resolvedWidgetType(item) === 'core.productFunnel')
+  if (!funnel) {
+    delete next.funnel
+  } else if (Array.isArray(funnel.config?.steps)) {
+    next.funnel = {
+      steps: funnel.config.steps.filter((step): step is string => typeof step === 'string'),
+      groupBy: typeof funnel.config.groupBy === 'string' ? funnel.config.groupBy : undefined,
+    }
+  }
+  const retentionWidget = dashboardLayout.value.find((item) => resolvedWidgetType(item) === 'core.retention')
+  if (!retentionWidget) {
+    delete next.retention
+  } else if (typeof retentionWidget.config?.cohortEvent === 'string'
+    && typeof retentionWidget.config.returnEvent === 'string'
+    && Array.isArray(retentionWidget.config.days)) {
+    next.retention = {
+      cohortEvent: retentionWidget.config.cohortEvent,
+      returnEvent: retentionWidget.config.returnEvent,
+      days: retentionWidget.config.days.filter((day): day is number => Number.isInteger(day)),
+    }
+  }
+  dashboardAnalyticsConfig.value = next
+}
+
+let layoutLoadGeneration = 0
+
+const loadLayout = async () => {
+  const generation = ++layoutLoadGeneration
+  const projectId = filters.projectId
+  const space = activeSpace.value
+  loadDashboardAnalyticsConfig(projectId)
+  if (projectId) {
+    try {
+      const response = await getProjectDashboards(projectId)
+      if (generation !== layoutLoadGeneration
+        || filters.projectId !== projectId
+        || activeSpace.value !== space) return
+      serverDashboards.value = response.data.data
+      const dashboard = serverDashboards.value.find(
+        (item) => item.dashboardKey === space && item.isActive,
+      )
+      if (dashboard && applyServerDashboard(dashboard)) return
+    } catch {
+      if (generation !== layoutLoadGeneration
+        || filters.projectId !== projectId
+        || activeSpace.value !== space) return
+      // An older backend may not have dashboard storage yet; keep the local fallback.
+      serverDashboards.value = []
+    }
+  }
+  if (generation !== layoutLoadGeneration
+    || filters.projectId !== projectId
+    || activeSpace.value !== space) return
+  const saved = projectId ? localStorage.getItem(layoutStorageKey(projectId, space)) : null
   if (saved) {
     try {
       const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         dashboardLayout.value = parsed
       } else {
-        dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[activeSpace.value]))
+        dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[space]))
       }
     } catch {
-      dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[activeSpace.value]))
+      dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[space]))
     }
   } else {
-    dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[activeSpace.value]))
+    dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[space]))
+  }
+  syncAnalyticsConfigFromLayout()
+}
+
+const widgetTypeFromId = (id: string) => {
+  if (id.startsWith('trafficTrends')) return 'core.trafficTrends'
+  if (id.startsWith('productFunnel')) return 'core.productFunnel'
+  if (id.startsWith('topEvents')) return 'core.topEvents'
+  if (id.startsWith('rankings')) return 'core.topPages'
+  if (id.startsWith('overview')) return 'core.overview'
+  if (id.startsWith('trends')) return 'core.trends'
+  if (id.startsWith('retention')) return 'core.retention'
+  if (id.startsWith('counters')) return 'core.counters'
+  if (id.startsWith('events')) return 'core.events'
+  if (id.startsWith('devices')) return 'core.devices'
+  if (id.startsWith('sessions')) return 'core.sessions'
+  if (id.startsWith('traffic')) return 'core.traffic'
+  return null
+}
+
+const resolvedWidgetType = (item: DashboardItem) => item.type || widgetTypeFromId(item.i)
+const isWidgetType = (item: DashboardItem, type: string) => resolvedWidgetType(item) === type
+const emptyExtensionConfig = Object.freeze({}) as DashboardExtensionConfig
+type ExtensionWidgetBinding = Readonly<{
+  extension: DashboardWidgetExtension
+  config: DashboardExtensionConfig
+}>
+type ExtensionWidgetBindingCache = {
+  type: string | null
+  space: DashboardSpace
+  sourceConfig: unknown
+  binding?: ExtensionWidgetBinding
+}
+const extensionWidgetBindingCache = new WeakMap<DashboardItem, ExtensionWidgetBindingCache>()
+const extensionBindingForWidget = (item: DashboardItem): ExtensionWidgetBinding | undefined => {
+  const type = resolvedWidgetType(item)
+  const sourceConfig = item.config
+  const cached = extensionWidgetBindingCache.get(item)
+  if (cached?.type === type && cached.space === activeSpace.value
+    && cached.sourceConfig === sourceConfig) {
+    return cached.binding
+  }
+
+  const extension = getDashboardWidgetExtension(type)
+  let binding: ExtensionWidgetBinding | undefined
+  if (extension?.spaces.includes(activeSpace.value)) {
+    const normalizedConfig = sourceConfig === undefined
+      ? (extension.configRequired ? null : emptyExtensionConfig)
+      : normalizeDashboardExtensionConfig(extension, sourceConfig)
+    if (normalizedConfig) {
+      binding = {
+        extension,
+        config: normalizedConfig === emptyExtensionConfig
+          ? emptyExtensionConfig
+          : readonly(normalizedConfig as object) as DashboardExtensionConfig,
+      }
+    }
+  }
+  extensionWidgetBindingCache.set(item, {
+    type,
+    space: activeSpace.value,
+    sourceConfig,
+    binding,
+  })
+  return binding
+}
+const extensionForWidget = (item: DashboardItem) => extensionBindingForWidget(item)?.extension
+const extensionComponent = (item: DashboardItem) =>
+  extensionForWidget(item)?.component || 'div'
+const extensionDisplayName = (extension: DashboardWidgetExtension) => {
+  const preferred = locale.value === 'zh'
+    ? ['zh-CN', 'zh', 'default', 'en']
+    : ['en', 'default', 'zh-CN', 'zh']
+  for (const key of preferred) {
+    const value = extension.displayName[key]
+    if (value) return value
+  }
+  return Object.values(extension.displayName)[0] || extension.type
+}
+const extensionConfig = (item: DashboardItem): DashboardExtensionConfig =>
+  extensionBindingForWidget(item)?.config || emptyExtensionConfig
+const updateExtensionWidgetConfig = (item: DashboardItem, config: unknown) => {
+  if (!isLayoutEditable.value || !dashboardLayout.value.some((candidate) => candidate === item)) return
+  const extension = extensionForWidget(item)
+  if (!extension) return
+  const cloned = normalizeDashboardExtensionConfig(extension, config)
+  if (!cloned) {
+    ElMessage.warning(t('metrics.extension.invalidConfig'))
+    return
+  }
+  item.config = cloned
+}
+const configForWidget = (type: string): Record<string, unknown> =>
+  dashboardLayout.value.find((item) => resolvedWidgetType(item) === type)?.config || {}
+
+const getWidgetLabel = (item: DashboardItem) => {
+  if (typeof item.config?.title === 'string' && item.config.title.trim()) {
+    return item.config.title.trim()
+  }
+  const type = resolvedWidgetType(item)
+  const extension = getDashboardWidgetExtension(type)
+  if (extension) return extensionDisplayName(extension)
+  return type && widgetLabelKeys[type] ? t(widgetLabelKeys[type]) : item.i
+}
+
+const hasCustomWidgetTitle = (item: DashboardItem) =>
+  typeof item.config?.title === 'string' && Boolean(item.config.title.trim())
+
+const widgetConfig = (type: string): Record<string, unknown> | undefined => {
+  if (type === 'core.productFunnel' && dashboardAnalyticsConfig.value.funnel) {
+    return dashboardAnalyticsConfig.value.funnel
+  }
+  if (type === 'core.retention' && dashboardAnalyticsConfig.value.retention) {
+    return dashboardAnalyticsConfig.value.retention
+  }
+  return undefined
+}
+
+const toServerDefinition = (): DashboardDefinition | null => {
+  if (dashboardLayout.value.length > 50) return null
+  const widgets: DashboardWidgetDefinition[] = []
+  const widgetIds = new Set<string>()
+  const widgetTypes = new Set<string>()
+  for (const item of dashboardLayout.value) {
+    const type = resolvedWidgetType(item)
+    if (!type || widgetIds.has(item.i) || widgetTypes.has(type)) return null
+    const extension = getDashboardWidgetExtension(type)
+    if (!widgetLabelKeys[type] && (!extension || !extension.spaces.includes(activeSpace.value))) {
+      return null
+    }
+    let config = item.config ?? widgetConfig(type)
+    if (extension) {
+      if (config === undefined && extension.configRequired) return null
+      if (config !== undefined) {
+        const cloned = normalizeDashboardExtensionConfig(extension, config)
+        if (!cloned) return null
+        config = cloned
+      }
+    }
+    widgetIds.add(item.i)
+    widgetTypes.add(type)
+    widgets.push({
+      id: item.i,
+      type,
+      layout: {
+        x: item.x,
+        y: item.y,
+        w: item.w,
+        h: item.h,
+        minW: item.minW,
+        minH: item.minH,
+      },
+      config,
+    })
+  }
+  return {
+    schemaVersion: 1,
+    defaultRange: filters.dateRange ? 'custom' : '7d',
+    widgets,
+  }
+}
+
+const saveServerDashboard = async () => {
+  if (!filters.projectId) return
+  const projectId = filters.projectId
+  const space = activeSpace.value
+  const definition = toServerDefinition()
+  if (!definition) {
+    ElMessage.error(t('metrics.dashboardUnsupportedWidget'))
+    return
+  }
+  const existing = serverDashboards.value.find((item) => item.dashboardKey === space)
+  dashboardSaving.value = true
+  try {
+    const response = await upsertProjectDashboard(projectId, space, {
+      displayName: space === 'operations'
+        ? { 'zh-CN': '运营概况', en: 'Operations' }
+        : { 'zh-CN': '明细数据', en: 'Detailed Data' },
+      description: space === 'operations'
+        ? 'Project operations dashboard'
+        : 'Project technical details dashboard',
+      schemaVersion: 1,
+      definition,
+      expectedRevision: existing?.revision ?? 0,
+      isDefault: space === 'operations',
+      isActive: true,
+    })
+    if (filters.projectId !== projectId || activeSpace.value !== space) return
+    const saved = response.data.data
+    serverDashboards.value = [
+      ...serverDashboards.value.filter((item) => item.dashboardKey !== saved.dashboardKey),
+      saved,
+    ]
+    saveLayout()
+    ElMessage.success(t('metrics.dashboardSaved'))
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('metrics.dashboardSaveFailed')))
+  } finally {
+    dashboardSaving.value = false
+  }
+}
+
+const layoutStorageKey = (
+  projectId = filters.projectId,
+  space: DashboardSpace = activeSpace.value,
+) => `analyticshub_dashboard_layout_v1_${encodeURIComponent(projectId)}_${space}`
+
+const analyticsConfigStorageKey = (projectId = filters.projectId) =>
+  `analyticshub_dashboard_analytics_v1_${encodeURIComponent(projectId)}`
+
+const loadDashboardAnalyticsConfig = (projectId = filters.projectId) => {
+  dashboardAnalyticsConfig.value = {}
+  if (!projectId || filters.projectId !== projectId) return
+  const raw = localStorage.getItem(analyticsConfigStorageKey(projectId))
+  if (!raw) return
+  try {
+    const candidate = JSON.parse(raw) as DashboardAnalyticsConfig
+    const isEventKey = (value: unknown): value is string =>
+      typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,100}$/.test(value.trim())
+    const isGroupByKey = (value: unknown): value is string =>
+      typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(value.trim())
+    const next: DashboardAnalyticsConfig = {}
+    if (candidate.funnel && Array.isArray(candidate.funnel.steps)) {
+      const steps = [...new Set(candidate.funnel.steps.filter(isEventKey).map(step => step.trim()))]
+      if (steps.length >= 2 && steps.length <= 12) {
+        next.funnel = {
+          steps,
+          groupBy: isGroupByKey(candidate.funnel.groupBy) ? candidate.funnel.groupBy.trim() : undefined,
+        }
+      }
+    }
+    if (candidate.retention
+      && isEventKey(candidate.retention.cohortEvent)
+      && isEventKey(candidate.retention.returnEvent)
+      && Array.isArray(candidate.retention.days)) {
+      const days = [...new Set(candidate.retention.days
+        .filter(day => Number.isInteger(day) && day >= 0 && day <= 90))]
+        .sort((left, right) => left - right)
+        .slice(0, 30)
+      if (days.length > 0) {
+        next.retention = {
+          cohortEvent: candidate.retention.cohortEvent.trim(),
+          returnEvent: candidate.retention.returnEvent.trim(),
+          days,
+        }
+      }
+    }
+    dashboardAnalyticsConfig.value = next
+  } catch {
+    dashboardAnalyticsConfig.value = {}
   }
 }
 
@@ -578,6 +1431,11 @@ const formatDuration = (value: number) => {
   if (hours > 0) return `${hours}h ${minutes % 60}m`
   if (minutes > 0) return `${minutes}m ${seconds % 60}s`
   return `${seconds}s`
+}
+
+const formatPercent = (value: number) => {
+  if (!Number.isFinite(value)) return '-'
+  return `${(value * 100).toFixed(1)}%`
 }
 
 const formatJson = (value: Record<string, unknown> | null) => {
@@ -606,197 +1464,284 @@ const overviewItems = computed(() => {
   return base
 })
 
+const productFunnelRows = computed(() => {
+  return (productFunnel.value?.groups || []).flatMap(group =>
+    group.steps.map(step => ({
+      groupKey: group.groupValue || 'all',
+      step: step.eventType,
+      users: step.users,
+      conversionRate: step.conversionRate,
+      dropOffRate: step.dropOffRate,
+    }))
+  )
+})
+
 // --- 6. Metric Loading Functions ---
-const loadOverview = async () => {
+const loadOverview = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
   overviewLoading.value = true
   try {
-    const params = cleanParams({ projectId: filters.projectId, ...rangeParams() })
+    const params = cleanParams({ projectId: context.projectId, ...rangeParams(context.snapshot) })
     const [overviewRes, trafficRes] = await Promise.all([
       getMetricsOverview(params),
-      filters.platform === 'web' 
-        ? getTrafficSummary({ ...params, granularity: filters.granularity }) 
+      context.snapshot.platform === 'web'
+        ? getTrafficSummary({ ...params, granularity: context.snapshot.granularity })
         : Promise.resolve(null)
     ])
     
+    if (!isCurrentProjectContext(context)) return
     overview.value = overviewRes.data.data
     if (trafficRes && 'data' in trafficRes) {
       trafficSummary.value = trafficRes.data.data
     }
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.overviewFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.overviewFailed')))
   } finally {
-    overviewLoading.value = false
+    if (isCurrentProjectContext(context)) overviewLoading.value = false
   }
 }
 
-const loadTrends = async () => {
+const loadTrends = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
+  const configuredGranularity = configForWidget('core.trends').granularity
+  const granularity: MetricsGranularity = configuredGranularity === 'hour' || configuredGranularity === 'day'
+    ? configuredGranularity
+    : context.snapshot.granularity
   trendsLoading.value = true
   try {
-    const res = await getMetricsTrends(cleanParams({ projectId: filters.projectId, granularity: filters.granularity, ...rangeParams() }))
+    const res = await getMetricsTrends(cleanParams({ projectId: context.projectId, granularity, ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
     trends.value = res.data.data
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.trendsFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.trendsFailed')))
   } finally {
-    trendsLoading.value = false
+    if (isCurrentProjectContext(context)) trendsLoading.value = false
   }
 }
 
-const loadTopEvents = async () => {
+const loadTopEvents = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
+  const config = configForWidget('core.topEvents')
+  const configuredLimit = typeof config.limit === 'number' ? config.limit : context.snapshot.topEventsLimit
+  const aggregation = config.aggregation === 'semantic' ? 'semantic' as const : 'raw' as const
   topEventsLoading.value = true
   try {
-    const res = await getTopEvents(cleanParams({ projectId: filters.projectId, limit: filters.topEventsLimit, ...rangeParams() }))
+    const res = await getTopEvents(cleanParams({
+      projectId: context.projectId,
+      limit: configuredLimit,
+      aggregation,
+      ...rangeParams(context.snapshot),
+    }))
+    if (!isCurrentProjectContext(context)) return
     topEvents.value = res.data.data
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.topEventsFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.topEventsFailed')))
   } finally {
-    topEventsLoading.value = false
+    if (isCurrentProjectContext(context)) topEventsLoading.value = false
   }
 }
 
-const loadEvents = async () => {
+const loadSemanticEventCatalog = async (context: ProjectRequestContext = captureProjectContext()) => {
+  try {
+    const response = await getEventCatalog(context.projectId)
+    if (!isCurrentProjectContext(context)) return
+    semanticEventCatalog.value = response.data.data.items
+  } catch {
+    // Semantic labels are an enhancement; raw event keys remain a safe fallback.
+    if (isCurrentProjectContext(context)) semanticEventCatalog.value = []
+  }
+}
+
+const loadEvents = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
+  const config = configForWidget('core.events')
+  const pageSize = typeof config.pageSize === 'number' ? config.pageSize : events.pageSize
+  const eventType = typeof config.eventType === 'string' ? config.eventType : context.snapshot.eventType
   eventsLoading.value = true
   try {
-    const res = await getEvents(cleanParams({ projectId: filters.projectId, page: events.page, pageSize: events.pageSize, eventType: filters.eventType, userId: filters.userId, deviceId: filters.deviceId, ...rangeParams() }))
+    const res = await getEvents(cleanParams({ projectId: context.projectId, page: context.snapshot.eventsPage, pageSize, eventType, userId: context.snapshot.userId, deviceId: context.snapshot.deviceId, ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
     Object.assign(events, res.data.data)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.eventsFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.eventsFailed')))
   } finally {
-    eventsLoading.value = false
+    if (isCurrentProjectContext(context)) eventsLoading.value = false
   }
 }
 
-const loadDevices = async () => {
+const loadDevices = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
+  const config = configForWidget('core.devices')
+  const pageSize = typeof config.pageSize === 'number' ? config.pageSize : devices.pageSize
   devicesLoading.value = true
   try {
-    const res = await getDevices(cleanParams({ projectId: filters.projectId, page: devices.page, pageSize: devices.pageSize, deviceId: filters.deviceId, apiKey: filters.apiKey, isBanned: filters.isBanned === '' ? undefined : filters.isBanned === 'true', ...rangeParams() }))
+    const res = await getDevices(cleanParams({ projectId: context.projectId, page: context.snapshot.devicesPage, pageSize, deviceId: context.snapshot.deviceId, apiKey: context.snapshot.apiKey, isBanned: context.snapshot.isBanned === '' ? undefined : context.snapshot.isBanned === 'true', ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
     Object.assign(devices, res.data.data)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.devicesFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.devicesFailed')))
   } finally {
-    devicesLoading.value = false
+    if (isCurrentProjectContext(context)) devicesLoading.value = false
   }
 }
 
-const loadSessions = async () => {
+const loadSessions = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
+  const config = configForWidget('core.sessions')
+  const pageSize = typeof config.pageSize === 'number' ? config.pageSize : sessions.pageSize
   sessionsLoading.value = true
   try {
-    const res = await getSessions(cleanParams({ projectId: filters.projectId, page: sessions.page, pageSize: sessions.pageSize, sessionId: filters.sessionId, userId: filters.userId, deviceId: filters.deviceId, ...rangeParams() }))
+    const res = await getSessions(cleanParams({ projectId: context.projectId, page: context.snapshot.sessionsPage, pageSize, sessionId: context.snapshot.sessionId, userId: context.snapshot.userId, deviceId: context.snapshot.deviceId, ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
     Object.assign(sessions, res.data.data)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.sessionsFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.sessionsFailed')))
   } finally {
-    sessionsLoading.value = false
+    if (isCurrentProjectContext(context)) sessionsLoading.value = false
   }
 }
 
-const loadTrafficTrends = async () => {
+const loadTrafficTrends = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
+  const configuredGranularity = configForWidget('core.trafficTrends').granularity
+  const allowedGranularities: TrafficGranularity[] = ['hour', 'day', 'week', 'month', 'year']
+  const granularity: TrafficGranularity = typeof configuredGranularity === 'string'
+    && allowedGranularities.includes(configuredGranularity as TrafficGranularity)
+    ? configuredGranularity as TrafficGranularity
+    : context.snapshot.granularity
   trafficTrendsLoading.value = true
   try {
-    const res = await getTrafficTrends(cleanParams({ projectId: filters.projectId, granularity: filters.granularity, ...rangeParams() }))
+    const res = await getTrafficTrends(cleanParams({ projectId: context.projectId, granularity, ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
     trafficTrends.value = res.data.data
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.trafficTrendsFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.trafficTrendsFailed')))
   } finally {
-    trafficTrendsLoading.value = false
+    if (isCurrentProjectContext(context)) trafficTrendsLoading.value = false
   }
 }
 
-const loadTopPages = async () => {
+const loadTopPages = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
+  const configuredLimit = configForWidget('core.topPages').limit
+  const limit = typeof configuredLimit === 'number' ? configuredLimit : context.snapshot.topEventsLimit
   topPagesLoading.value = true
   try {
-    const res = await getTopPages(cleanParams({ projectId: filters.projectId, limit: filters.topEventsLimit, ...rangeParams() }))
-    topPages.value = res.data.data
+    const res = await getTopPages(cleanParams({ projectId: context.projectId, limit, ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
+    topPages.value = res.data.data.items
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.topPagesFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.topPagesFailed')))
   } finally {
-    topPagesLoading.value = false
+    if (isCurrentProjectContext(context)) topPagesLoading.value = false
   }
 }
 
-const loadTopReferrers = async () => {
+const loadTopReferrers = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
   topReferrersLoading.value = true
   try {
-    const res = await getTopReferrers(cleanParams({ projectId: filters.projectId, limit: filters.topEventsLimit, ...rangeParams() }))
-    topReferrers.value = res.data.data
+    const res = await getTopReferrers(cleanParams({ projectId: context.projectId, limit: context.snapshot.topEventsLimit, ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
+    topReferrers.value = res.data.data.items
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.topReferrersFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.topReferrersFailed')))
   } finally {
-    topReferrersLoading.value = false
+    if (isCurrentProjectContext(context)) topReferrersLoading.value = false
   }
 }
 
-const loadTraffic = async () => {
+const loadTraffic = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
+  const config = configForWidget('core.traffic')
+  const pageSize = typeof config.pageSize === 'number' ? config.pageSize : traffic.pageSize
+  const metricType = typeof config.metricType === 'string' ? config.metricType : context.snapshot.metricType
   trafficLoading.value = true
   try {
-    if (filters.platform === 'web') {
+    if (context.snapshot.platform === 'web') {
       const summaryRes = await getTrafficSummary(cleanParams({ 
-        projectId: filters.projectId, 
-        granularity: filters.granularity,
-        ...rangeParams() 
+        projectId: context.projectId,
+        granularity: context.snapshot.granularity,
+        ...rangeParams(context.snapshot)
       }))
+      if (!isCurrentProjectContext(context)) return
       trafficSummary.value = summaryRes.data.data
-      await Promise.all([loadTrafficTrends(), loadTopPages(), loadTopReferrers()])
+      await Promise.all([loadTrafficTrends(context), loadTopPages(context), loadTopReferrers(context)])
     } else {
+      if (!isCurrentProjectContext(context)) return
       trafficSummary.value = null; trafficTrends.value = null; topPages.value = []; topReferrers.value = []
     }
-    const res = await getTrafficMetrics(cleanParams({ projectId: filters.projectId, page: traffic.page, pageSize: traffic.pageSize, metricType: filters.metricType, userId: filters.userId, deviceId: filters.deviceId, sessionId: filters.sessionId, ...rangeParams() }))
+    const res = await getTrafficMetrics(cleanParams({ projectId: context.projectId, page: context.snapshot.trafficPage, pageSize, metricType, userId: context.snapshot.userId, deviceId: context.snapshot.deviceId, sessionId: context.snapshot.sessionId, ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
     Object.assign(traffic, res.data.data)
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.trafficFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.trafficFailed')))
   } finally {
-    trafficLoading.value = false
+    if (isCurrentProjectContext(context)) trafficLoading.value = false
   }
 }
 
-const loadCounters = async () => {
+const loadProductFunnel = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
-  countersLoading.value = true
+  const sourceConfig = dashboardAnalyticsConfig.value.funnel
+  const config = sourceConfig ? { steps: [...sourceConfig.steps], groupBy: sourceConfig.groupBy } : undefined
+  if (!config) {
+    productFunnel.value = null
+    return
+  }
+  productFunnelLoading.value = true
   try {
-    const res = await getCounters({ projectId: filters.projectId })
-    counters.value = res.data.data.items
+    const res = await getProductFunnel(cleanParams({
+      projectId: context.projectId,
+      steps: config.steps.join(','),
+      groupBy: config.groupBy,
+      ...rangeParams(context.snapshot),
+    }))
+    if (!isCurrentProjectContext(context)) return
+    productFunnel.value = res.data.data
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.countersFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.productFunnelFailed')))
   } finally {
-    countersLoading.value = false
+    if (isCurrentProjectContext(context)) productFunnelLoading.value = false
+  }
+}
+
+const loadRetention = async (context: ProjectRequestContext = captureProjectContext()) => {
+  if (!requireProject()) return
+  const sourceConfig = dashboardAnalyticsConfig.value.retention
+  const config = sourceConfig ? { ...sourceConfig, days: [...sourceConfig.days] } : undefined
+  if (!config) {
+    retention.value = null
+    return
+  }
+  retentionLoading.value = true
+  try {
+    const res = await getProductRetention(cleanParams({
+      projectId: context.projectId,
+      cohortEvent: config.cohortEvent,
+      returnEvent: config.returnEvent,
+      days: config.days.join(','),
+      ...rangeParams(context.snapshot),
+    }))
+    if (!isCurrentProjectContext(context)) return
+    retention.value = res.data.data
+  } catch (error) {
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.retentionFailed')))
+  } finally {
+    if (isCurrentProjectContext(context)) retentionLoading.value = false
   }
 }
 
 // --- 7. Action Handlers ---
-const handleIncrementCounter = async (row: CounterItem) => {
+const loadCounterEventTypeOptions = async () => {
+  const projectId = filters.projectId
+  if (!projectId) return
   try {
-    await incrementCounter(row.key, { projectId: filters.projectId })
-    ElMessage.success(t('buttons.increment') + ' ' + t('messages.initSuccess'))
-    await loadCounters()
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('errors.networkFailed')))
-  }
-}
-
-const showEditCounterDialog = (row: CounterItem) => {
-  counterForm.key = row.key
-  counterForm.value = row.value
-  counterForm.isPublic = row.isPublic
-  counterDialogVisible.value = true
-}
-
-const handleSaveCounter = async () => {
-  try {
-    await setCounter(counterForm.key, { projectId: filters.projectId, value: counterForm.value, isPublic: counterForm.isPublic })
-    ElMessage.success(t('messages.projectUpdated'))
-    counterDialogVisible.value = false
-    await loadCounters()
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.saveProjectFailed')))
+    const response = await getCounterEventTypes({ projectId })
+    if (filters.projectId === projectId) counterEventTypes.value = response.data.data
+  } catch {
+    // The select still accepts a typed event key when metadata cannot be loaded.
+    if (filters.projectId === projectId) counterEventTypes.value = []
   }
 }
 
@@ -811,29 +1756,36 @@ const handleTrafficPageChange = (page: number) => { traffic.page = page; loadTra
 
 const refreshAll = async () => {
   if (!requireProject()) return
+  resetPages()
+  extensionRefreshToken.value += 1
+  const context = beginRefreshContext()
+  const widgetTypes = dashboardLayout.value.map((item) => resolvedWidgetType(item))
   refreshing.value = true
   try {
-    resetPages()
     const loadPromises: Promise<void>[] = []
-    for (const item of dashboardLayout.value) {
-      if (item.i.startsWith('overview')) loadPromises.push(loadOverview())
-      else if (item.i.startsWith('trends')) loadPromises.push(loadTrends())
-      else if (item.i.startsWith('topEvents')) loadPromises.push(loadTopEvents())
-      else if (item.i.startsWith('trafficTrends')) loadPromises.push(loadTrafficTrends())
-      else if (item.i.startsWith('rankings')) loadPromises.push(loadTopPages())
-      else if (item.i.startsWith('counters')) loadPromises.push(loadCounters())
-      else if (item.i.startsWith('traffic')) loadPromises.push(loadTraffic())
-      else if (item.i.startsWith('events')) loadPromises.push(loadEvents())
-      else if (item.i.startsWith('devices')) loadPromises.push(loadDevices())
-      else if (item.i.startsWith('sessions')) loadPromises.push(loadSessions())
+    if (widgetTypes.some((type) => type === 'core.topEvents' || type === 'core.events')) {
+      loadPromises.push(loadSemanticEventCatalog(context))
+    }
+    for (const type of widgetTypes) {
+      if (type === 'core.overview') loadPromises.push(loadOverview(context))
+      else if (type === 'core.trends') loadPromises.push(loadTrends(context))
+      else if (type === 'core.topEvents') loadPromises.push(loadTopEvents(context))
+      else if (type === 'core.trafficTrends') loadPromises.push(loadTrafficTrends(context))
+      else if (type === 'core.topPages') loadPromises.push(loadTopPages(context))
+      else if (type === 'core.productFunnel') loadPromises.push(loadProductFunnel(context))
+      else if (type === 'core.retention') loadPromises.push(loadRetention(context))
+      else if (type === 'core.traffic') loadPromises.push(loadTraffic(context))
+      else if (type === 'core.events') loadPromises.push(loadEvents(context))
+      else if (type === 'core.devices') loadPromises.push(loadDevices(context))
+      else if (type === 'core.sessions') loadPromises.push(loadSessions(context))
     }
     await Promise.all(loadPromises)
   } finally {
-    refreshing.value = false
+    if (isCurrentProjectContext(context)) refreshing.value = false
   }
 }
 
-const chartInstances: Record<string, echarts.ECharts> = {}
+const chartInstances: Record<string, ECharts> = {}
 let resizeObserver: ResizeObserver | null = null
 
 const initChart = (id: string, theme: string = 'light') => {
@@ -845,7 +1797,7 @@ const initChart = (id: string, theme: string = 'light') => {
   }
 
   // Create chart
-  const chart = echarts.init(el, theme)
+  const chart = init(el, theme)
   chartInstances[id] = chart
 
   // Setup ResizeObserver to handle fluid layouts perfectly
@@ -868,8 +1820,28 @@ const handleResize = () => {
   })
 }
 
+const formatTrendAxisLabel = (value: string, granularity: TrafficGranularity) => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const displayLocale = locale.value === 'zh' ? 'zh-CN' : 'en-US'
+  if (granularity === 'hour') {
+    return date.toLocaleString(displayLocale, {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    })
+  }
+  if (granularity === 'month') {
+    return date.toLocaleDateString(displayLocale, { year: 'numeric', month: '2-digit' })
+  }
+  if (granularity === 'year') return String(date.getFullYear())
+  return date.toLocaleDateString(displayLocale)
+}
+
 const updateBusinessTrendsChart = () => {
-  const widget = dashboardLayout.value.find(w => w.i.startsWith('trends'))
+  const widget = dashboardLayout.value.find(w => isWidgetType(w, 'core.trends'))
   if (!widget) return
   const id = 'chart-business-' + widget.i
   const chart = chartInstances[id] || initChart(id)
@@ -882,10 +1854,7 @@ const updateBusinessTrendsChart = () => {
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: trends.value.points.map(p => {
-        const d = new Date(p.time)
-        return filters.granularity === 'hour' ? d.getHours() + ':00' : d.toLocaleDateString()
-      })
+      data: trends.value.points.map((point) => formatTrendAxisLabel(point.time, trends.value!.granularity))
     },
     yAxis: { type: 'value' },
     series: [
@@ -911,7 +1880,7 @@ const updateBusinessTrendsChart = () => {
 }
 
 const updateTrafficTrendsChart = () => {
-  const widget = dashboardLayout.value.find(w => w.i.startsWith('trafficTrends'))
+  const widget = dashboardLayout.value.find(w => isWidgetType(w, 'core.trafficTrends'))
   if (!widget) return
   const id = 'chart-traffic-' + widget.i
   const chart = chartInstances[id] || initChart(id)
@@ -924,10 +1893,7 @@ const updateTrafficTrendsChart = () => {
     xAxis: {
       type: 'category',
       boundaryGap: false,
-      data: trafficTrends.value.points.map(p => {
-        const d = new Date(p.time)
-        return filters.granularity === 'hour' ? d.getHours() + ':00' : d.toLocaleDateString()
-      })
+      data: trafficTrends.value.points.map((point) => formatTrendAxisLabel(point.time, trafficTrends.value!.granularity))
     },
     yAxis: { type: 'value' },
     series: [
@@ -959,8 +1925,10 @@ const loadProjects = async () => {
     const res = await getProjects()
     projects.value = res.data.data
     const firstProject = projects.value[0]
-    if (routeProjectId.value) filters.projectId = routeProjectId.value
-    else if (!filters.projectId && firstProject) filters.projectId = firstProject.projectId
+    const preferredProjectId = routeProjectId.value || filters.projectId
+    filters.projectId = projects.value.some((project) => project.projectId === preferredProjectId)
+      ? preferredProjectId
+      : firstProject?.projectId || ''
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   }
@@ -968,8 +1936,44 @@ const loadProjects = async () => {
 
 const layoutVisible = ref(false)
 
+const clearProjectScopedState = () => {
+  overview.value = null
+  trends.value = null
+  topEvents.value = null
+  trafficTrends.value = null
+  topPages.value = []
+  topReferrers.value = []
+  trafficSummary.value = null
+  productFunnel.value = null
+  retention.value = null
+  semanticEventCatalog.value = []
+  counterEventTypes.value = []
+  widgetConfigDialogVisible.value = false
+  widgetConfigType.value = ''
+  Object.assign(events, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
+  Object.assign(devices, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
+  Object.assign(sessions, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
+  Object.assign(traffic, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
+  overviewLoading.value = false
+  trendsLoading.value = false
+  topEventsLoading.value = false
+  eventsLoading.value = false
+  devicesLoading.value = false
+  sessionsLoading.value = false
+  trafficLoading.value = false
+  trafficTrendsLoading.value = false
+  topPagesLoading.value = false
+  topReferrersLoading.value = false
+  productFunnelLoading.value = false
+  retentionLoading.value = false
+  refreshing.value = false
+}
+
 // --- 8. Watchers & Lifecycle ---
 watch(activeSpace, async () => {
+  metricsRequestGeneration += 1
+  const space = activeSpace.value
+  const projectGeneration = projectContextGeneration
   layoutVisible.value = false // 1. 强制销毁组件
   isLayoutEditable.value = false
   dashboardLayout.value = []
@@ -977,8 +1981,11 @@ watch(activeSpace, async () => {
   await nextTick()
   // 增加微小延迟，确保 DOM 容器宽度计算完成，防止布局挤死在左侧
   setTimeout(async () => {
-    loadLayout()
+    if (space !== activeSpace.value || projectGeneration !== projectContextGeneration) return
+    await loadLayout()
+    if (space !== activeSpace.value || projectGeneration !== projectContextGeneration) return
     if (filters.projectId) await refreshAll()
+    if (space !== activeSpace.value || projectGeneration !== projectContextGeneration) return
     layoutVisible.value = true
     nextTick(() => {
       handleResize() // Ensure charts are sized correctly after space switch
@@ -989,8 +1996,22 @@ watch(activeSpace, async () => {
 })
 
 watch(() => filters.projectId, async () => {
+  projectContextGeneration += 1
+  metricsRequestGeneration += 1
+  const context = captureProjectContext()
+  layoutVisible.value = false
+  serverDashboards.value = []
+  dashboardLayout.value = []
+  clearProjectScopedState()
+  if (filters.projectId && routeProjectId.value !== filters.projectId) {
+    await router.replace({ path: '/metrics', query: { projectId: filters.projectId } })
+  }
+  await loadLayout()
+  if (!isCurrentProjectScope(context)) return
   resetPages()
-  await refreshAll()
+  if (filters.projectId) await refreshAll()
+  if (!isCurrentProjectScope(context)) return
+  layoutVisible.value = true
 })
 
 watch(() => filters.platform, async () => {
@@ -1007,13 +2028,25 @@ watch(dashboardLayout, saveLayout, { deep: true })
 
 watch(trends, () => nextTick(updateBusinessTrendsChart))
 watch(trafficTrends, () => nextTick(updateTrafficTrendsChart))
-watch(filters, async () => {
+watch(() => [
+  filters.dateRange?.join('|') || '',
+  filters.granularity,
+  filters.topEventsLimit,
+  filters.eventType,
+  filters.userId,
+  filters.deviceId,
+  filters.sessionId,
+  filters.apiKey,
+  filters.isBanned,
+  filters.metricType,
+  filters.platform,
+], async () => {
   await refreshAll()
   nextTick(() => {
     updateBusinessTrendsChart()
     updateTrafficTrendsChart()
   })
-}, { deep: true })
+})
 
 watch(isLayoutEditable, (val) => {
   if (!val) {
@@ -1024,8 +2057,8 @@ watch(isLayoutEditable, (val) => {
 onMounted(() => {
   window.addEventListener('resize', handleResize)
   setTimeout(async () => {
-    loadLayout()
     await loadProjects()
+    await loadLayout()
     if (filters.projectId) await refreshAll()
     layoutVisible.value = true
     nextTick(() => {
@@ -1179,6 +2212,29 @@ onUnmounted(() => {
   height: 100%;
 }
 
+.widget-header {
+  min-height: 32px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.widget-palette {
+  margin: -4px 0 12px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+  border: 1px dashed var(--el-border-color);
+  border-radius: 8px;
+}
+
 /* Scrollbar for widgets */
 .widget-inner::-webkit-scrollbar {
   width: 4px;
@@ -1268,7 +2324,11 @@ onUnmounted(() => {
 }
 
 .segment-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
   padding: 6px 16px;
+  font-family: inherit;
   font-size: 13px;
   font-weight: 600;
   color: #636366;

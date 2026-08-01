@@ -11,15 +11,37 @@ export interface ApiResponse<T> {
   timestamp?: string
 }
 
+export type ProjectTableKey =
+  | 'devices'
+  | 'events'
+  | 'sessions'
+  | 'traffic_metrics'
+  | 'counters'
+  | 'privacy_requests'
+  | 'idempotency_keys'
+  | 'work_order_activities'
+  | 'work_order_outbox'
+
 export interface ProjectHealth {
   connected: boolean
-  tables: {
-    devices: boolean
-    events: boolean
-    sessions: boolean
-    trafficMetrics: boolean
-  }
+  tables: Partial<Record<ProjectTableKey, boolean>>
   allTablesExist: boolean
+  schemaCurrent: boolean
+  migrationHistoryValid: boolean
+  schemaVersion?: string | null
+  pendingMigrations: number
+  historyTable?: string | null
+  errorCode?: string | null
+  error?: string | null
+}
+
+export interface ProjectInitResult {
+  message: string
+  tables: string[]
+  schemaVersion: string | null
+  migrationsExecuted: number
+  historyTable: string
+  legacyBaselineApplied: boolean
 }
 
 export interface Project {
@@ -94,5 +116,5 @@ export const checkProjectHealth = (id: string) => {
 }
 
 export const initProjectDatabase = (id: string) => {
-  return request.post<ApiResponse<null>>(`/admin/projects/${id}/init`)
+  return request.post<ApiResponse<ProjectInitResult>>(`/admin/projects/${id}/init`)
 }

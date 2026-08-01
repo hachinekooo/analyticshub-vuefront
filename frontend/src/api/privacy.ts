@@ -23,6 +23,7 @@ export type PrivacyRequestItem = {
   processedAt: string | null
   closedAt: string | null
   operator: string | null
+  version: number
 }
 
 export type PrivacyRequestDetail = PrivacyRequestItem & {
@@ -37,8 +38,8 @@ export type PrivacyRequestDetail = PrivacyRequestItem & {
 
 export type PrivacyRequestsResponse = {
   projectId: string
-  rangeStart: string
-  rangeEnd: string
+  rangeStart: string | null
+  rangeEnd: string | null
   page: number
   pageSize: number
   total: number
@@ -55,9 +56,11 @@ export type PrivacyRequestListParams = {
   requestType?: PrivacyRequestType
   processor?: PrivacyProcessor
   userId?: string
+  openOnly?: boolean
 }
 
 export type PrivacyRequestUpdatePayload = {
+  version: number
   status: PrivacyRequestStatus
   operator?: string
   operatorNote?: string
@@ -72,6 +75,22 @@ export type PrivacyRequestNotifyPayload = {
   operator?: string
 }
 
+export type WorkOrderActivity = {
+  activityId: string
+  activityType: string
+  fromStatus: string | null
+  toStatus: string | null
+  actor: string | null
+  details: Record<string, unknown> | null
+  createdAt: string
+}
+
+export type WorkOrderNotificationQueued = {
+  requestId: string
+  notificationId: string
+  status: 'QUEUED'
+}
+
 export const getPrivacyRequests = (params: PrivacyRequestListParams) => {
   return request.get<ApiResponse<PrivacyRequestsResponse>>('/admin/privacy/requests', { params })
 }
@@ -80,6 +99,13 @@ export const getPrivacyRequestDetail = (projectId: string, requestId: string) =>
   return request.get<ApiResponse<PrivacyRequestDetail>>(`/admin/privacy/requests/${requestId}`, {
     params: { projectId },
   })
+}
+
+export const getPrivacyRequestActivities = (projectId: string, requestId: string) => {
+  return request.get<ApiResponse<WorkOrderActivity[]>>(
+    `/admin/privacy/requests/${requestId}/activities`,
+    { params: { projectId } },
+  )
 }
 
 export const updatePrivacyRequest = (
@@ -99,7 +125,7 @@ export const notifyPrivacyRequestUser = (
   requestId: string,
   payload: PrivacyRequestNotifyPayload,
 ) => {
-  return request.post<ApiResponse<{ requestId: string; status: string }>>(
+  return request.post<ApiResponse<WorkOrderNotificationQueued>>(
     `/admin/privacy/requests/${requestId}/notify`,
     payload,
     { params: { projectId } },
