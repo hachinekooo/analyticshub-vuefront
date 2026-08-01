@@ -1,42 +1,32 @@
 # AnalyticsHub Frontend
 
-## 简介
-这是 AnalyticsHub 的前端项目仓库。
+AnalyticsHub 的 Vue 3 管理端。应用以 `/analyticshub/` 为默认部署路径，通过同源 `/analyticshub/api/**` 访问后端。
 
 ## 目录结构
+
 - `frontend/`: 基于 Vue 3 + Vite 的前端应用核心代码。
 - `docs/DEPLOYMENT.md`: 前端部署说明。
 
 ## 快速开始
 
-本项目使用 **pnpm** 进行包管理。
+请使用 `frontend/.nvmrc` 指定的 Node.js 和 `frontend/package.json#packageManager` 指定的 pnpm：
 
-1. **进入前端目录**
-   ```bash
-   cd frontend
-   ```
+```bash
+cd frontend
+nvm use
+corepack enable
+pnpm install --frozen-lockfile
+pnpm dev
+```
 
-2. **安装依赖**
-   ```bash
-   pnpm install
-   ```
+## 工程门禁
 
-3. **启动开发服务器**
-   ```bash
-   pnpm dev
-   ```
+提交前运行唯一综合门禁；它依次执行 non-mutating lint（不自动改文件）、Vitest、TypeScript 检查、生产构建和 bundle budget（产物体积上限）校验：
 
-4. **构建生产版本**
-   ```bash
-   pnpm build
-   ```
+```bash
+pnpm check
+```
 
-## 远程访问 / 内网穿透说明
+开发中可分别使用 `pnpm test` / `pnpm test:watch` / `pnpm lint:check` / `pnpm type-check` / `pnpm build`。部署参数和 Nginx 路由见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 
-如果你使用 **cpolar** 或其他内网穿透工具访问开发服务器，可能会遇到 "Blocked request" 或热更新失效的问题。
-请修改 `frontend/vite.config.ts` 中的 `server` 配置：
-
-1. 取消 `allowedHosts` 的注释，填入你的穿透域名。
-2. 取消 `hmr` 配置的注释，确保热更新连接到正确的穿透地址。
-
-详细配置示例请参考 `vite.config.ts` 文件内的注释。
+GitHub Actions 在每次相关 push / pull request 中执行同一个 `pnpm check`，不包含发布或部署步骤。
