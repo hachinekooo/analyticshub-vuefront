@@ -39,7 +39,7 @@
       @finish="isLayoutEditable = false"
     />
 
-      <div class="workspace-area">
+      <div class="workspace-area" :class="{ 'is-editing': isLayoutEditable }">
         <grid-layout
           v-if="layoutVisible"
           v-model:layout="dashboardLayout"
@@ -71,7 +71,18 @@
               <div class="widget-header-bar" v-if="isLayoutEditable">
                  <span class="widget-drag-handle"><el-icon><Rank /></el-icon></span>
                  <span class="widget-label">{{ getWidgetLabel(item) }}</span>
-                 <el-button :aria-label="t('buttons.delete')" size="small" link type="danger" @click="removeWidget(item.i)">
+                 <span class="widget-resize-hint">{{ t('metrics.customization.resizeHint') }}</span>
+                 <el-button
+                   v-if="canConfigureWidget(item)"
+                   :aria-label="t('metrics.widgetConfig.editAction')"
+                   :title="t('metrics.widgetConfig.editAction')"
+                   size="small"
+                   link
+                   @click.stop="openWidgetConfig(item)"
+                 >
+                   <el-icon><Setting /></el-icon>
+                 </el-button>
+                 <el-button :aria-label="t('buttons.delete')" :title="t('buttons.delete')" size="small" link type="danger" @click.stop="removeWidget(item.i)">
                    <el-icon><Close /></el-icon>
                  </el-button>
               </div>
@@ -333,6 +344,14 @@
       width="620px"
     >
       <el-form :model="widgetConfigForm" label-position="top">
+        <div v-if="widgetConfigTargetId" class="widget-size-fields">
+          <el-form-item :label="t('metrics.widgetConfig.width')">
+            <el-input-number v-model="widgetConfigForm.width" :min="widgetConfigMinWidth" :max="12" />
+          </el-form-item>
+          <el-form-item :label="t('metrics.widgetConfig.height')">
+            <el-input-number v-model="widgetConfigForm.height" :min="widgetConfigMinHeight" :max="40" />
+          </el-form-item>
+        </div>
         <el-form-item :label="t('metrics.widgetConfig.customTitle')">
           <el-input
             v-model="widgetConfigForm.title"
@@ -416,7 +435,9 @@
       </el-form>
       <template #footer>
         <el-button @click="widgetConfigDialogVisible = false">{{ t('buttons.cancel') }}</el-button>
-        <el-button type="primary" @click="confirmConfiguredWidget">{{ t('metrics.addWidget') }}</el-button>
+        <el-button type="primary" @click="confirmConfiguredWidget">
+          {{ widgetConfigTargetId ? t('buttons.save') : t('metrics.addWidget') }}
+        </el-button>
       </template>
     </el-dialog>
 
@@ -459,6 +480,7 @@ import {
 import {
   Close,
   Rank,
+  Setting,
 } from '@element-plus/icons-vue'
 import {
   getDevices,
@@ -519,8 +541,6 @@ interface DashboardAnalyticsConfig {
 }
 
 type DashboardSpace = 'operations' | 'technical'
-type ConfigurableAnalyticsWidgetType = 'core.productFunnel' | 'core.retention'
-
 // --- 2. State & Basic Setup ---
 const route = useRoute()
 const router = useRouter()
@@ -652,15 +672,23 @@ const traffic = reactive<PagedResult<TrafficMetricRecord>>({ projectId: '', rang
 // Dialogs & Form
 const counterEventTypes = ref<string[]>([])
 const widgetConfigDialogVisible = ref(false)
-const widgetConfigType = ref<ConfigurableAnalyticsWidgetType | ''>('')
+const widgetConfigType = ref('')
+const widgetConfigTargetId = ref('')
 const widgetConfigForm = reactive({
   title: '',
+  width: 6,
+  height: 8,
   funnelSteps: [] as string[],
   groupBy: '',
   cohortEvent: '',
   returnEvent: '',
   retentionDaysText: '1, 7, 30',
 })
+const widgetConfigTarget = computed(() =>
+  dashboardLayout.value.find((item) => item.i === widgetConfigTargetId.value),
+)
+const widgetConfigMinWidth = computed(() => widgetConfigTarget.value?.minW || 2)
+const widgetConfigMinHeight = computed(() => widgetConfigTarget.value?.minH || 2)
 const dashboardEventTypeOptions = computed(() => Array.from(new Set([
   ...counterEventTypes.value,
   ...semanticEventCatalog.value.map((entry) => entry.rawKey),
@@ -888,12 +916,45 @@ const appendWidgetType = (type: string, config?: Record<string, unknown>) => {
 const resetWidgetConfigForm = () => {
   Object.assign(widgetConfigForm, {
     title: '',
+    width: 6,
+    height: 8,
     funnelSteps: [],
     groupBy: '',
     cohortEvent: '',
     returnEvent: '',
     retentionDaysText: '1, 7, 30',
   })
+}
+
+const canConfigureWidget = (item: DashboardItem) => {
+  const type = resolvedWidgetType(item)
+  return Boolean(type && !getDashboardWidgetExtension(type))
+}
+
+const openWidgetConfig = (item: DashboardItem) => {
+  const type = resolvedWidgetType(item)
+  if (!type || getDashboardWidgetExtension(type)) return
+  resetWidgetConfigForm()
+  widgetConfigTargetId.value = item.i
+  widgetConfigType.value = type
+  widgetConfigForm.title = typeof item.config?.title === 'string' ? item.config.title : ''
+  widgetConfigForm.width = item.w
+  widgetConfigForm.height = item.h
+  if (type === 'core.productFunnel') {
+    widgetConfigForm.funnelSteps = Array.isArray(item.config?.steps)
+      ? item.config.steps.filter((step): step is string => typeof step === 'string')
+      : []
+    widgetConfigForm.groupBy = typeof item.config?.groupBy === 'string' ? item.config.groupBy : ''
+  }
+  if (type === 'core.retention') {
+    widgetConfigForm.cohortEvent = typeof item.config?.cohortEvent === 'string' ? item.config.cohortEvent : ''
+    widgetConfigForm.returnEvent = typeof item.config?.returnEvent === 'string' ? item.config.returnEvent : ''
+    widgetConfigForm.retentionDaysText = Array.isArray(item.config?.days)
+      ? item.config.days.filter((day): day is number => Number.isInteger(day)).join(', ')
+      : '1, 7, 30'
+  }
+  widgetConfigDialogVisible.value = true
+  if (type === 'core.productFunnel' || type === 'core.retention') void loadCounterEventTypeOptions()
 }
 
 const addWidgetType = (type: string) => {
@@ -904,6 +965,7 @@ const addWidgetType = (type: string) => {
   }
   if (type === 'core.productFunnel' || type === 'core.retention') {
     resetWidgetConfigForm()
+    widgetConfigTargetId.value = ''
     widgetConfigType.value = type
     widgetConfigDialogVisible.value = true
     void loadCounterEventTypeOptions()
@@ -937,7 +999,7 @@ const confirmConfiguredWidget = () => {
     }
     config.steps = steps
     if (groupBy) config.groupBy = groupBy
-  } else {
+  } else if (type === 'core.retention') {
     const cohortEvent = widgetConfigForm.cohortEvent.trim()
     const returnEvent = widgetConfigForm.returnEvent.trim()
     const dayValues = widgetConfigForm.retentionDaysText
@@ -960,6 +1022,19 @@ const confirmConfiguredWidget = () => {
   }
 
   widgetConfigDialogVisible.value = false
+  if (widgetConfigTargetId.value) {
+    const item = dashboardLayout.value.find((candidate) => candidate.i === widgetConfigTargetId.value)
+    if (item) {
+      item.config = config
+      item.w = Math.min(12, Math.max(item.minW || 2, widgetConfigForm.width))
+      item.h = Math.min(40, Math.max(item.minH || 2, widgetConfigForm.height))
+      item.x = Math.min(item.x, 12 - item.w)
+    }
+    syncAnalyticsConfigFromLayout()
+    widgetConfigTargetId.value = ''
+    void nextTick(() => refreshAll())
+    return
+  }
   appendWidgetType(type, config)
 }
 
@@ -1870,6 +1945,7 @@ const clearProjectScopedState = () => {
   counterEventTypes.value = []
   widgetConfigDialogVisible.value = false
   widgetConfigType.value = ''
+  widgetConfigTargetId.value = ''
   Object.assign(events, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
   Object.assign(devices, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
   Object.assign(sessions, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
@@ -2009,15 +2085,26 @@ onUnmounted(() => {
   color: #1d1d1f;
 }
 
+.widget-size-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.widget-size-fields :deep(.el-input-number) { width: 100%; }
+
 .workspace-area {
   width: 100%;
   min-height: calc(100vh - 300px);
   padding: 10px;
-  background: #f8f9fa;
+  background: transparent;
   border-radius: 12px;
-  border: 1px dashed #dcdfe6;
+  border: 1px solid transparent;
   display: block;
   box-sizing: border-box;
+}
+.workspace-area.is-editing {
+  background: #f5f5f7;
+  border-color: rgba(0, 0, 0, 0.1);
 }
 
 .dashboard-grid {
@@ -2026,17 +2113,17 @@ onUnmounted(() => {
 
 .grid-item-card {
   background: white;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   overflow: hidden;
   transition: all 0.3s ease;
 }
 
 .grid-item-card.is-editing {
   overflow: visible !important;
-  border: 1px solid #409eff;
-  box-shadow: 0 4px 16px rgba(64, 158, 255, 0.15);
+  border-color: #0071e3;
+  box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.14), 0 4px 16px rgba(0, 0, 0, 0.08);
   z-index: 100;
 }
 
@@ -2048,14 +2135,18 @@ onUnmounted(() => {
 
 .grid-item-card.is-editing :deep(.vue-resizable-handle) {
   opacity: 1;
-  background-color: #409eff;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid white;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  bottom: 0px;
-  right: 0px;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 1px solid rgba(0, 113, 227, 0.45);
+  border-radius: 7px;
+  background:
+    linear-gradient(135deg, transparent 44%, #0071e3 45%, #0071e3 52%, transparent 53%) 5px 5px / 12px 12px no-repeat,
+    linear-gradient(135deg, transparent 44%, #0071e3 45%, #0071e3 52%, transparent 53%) 9px 9px / 9px 9px no-repeat,
+    #ffffff;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.18);
+  bottom: -7px;
+  right: -7px;
   cursor: nwse-resize;
 }
 
@@ -2067,9 +2158,11 @@ onUnmounted(() => {
 }
 
 .widget-header-bar {
-  background: #f5f7fa;
-  padding: 6px 12px;
-  border-bottom: 1px solid #ebeef5;
+  min-height: 34px;
+  box-sizing: border-box;
+  background: #f5f5f7;
+  padding: 5px 9px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -2077,17 +2170,27 @@ onUnmounted(() => {
 }
 
 .widget-drag-handle {
-  cursor: move;
-  color: #909399;
+  align-self: stretch;
+  min-width: 24px;
+  justify-content: center;
+  cursor: grab;
+  color: #6e6e73;
   display: flex;
   align-items: center;
 }
+.widget-drag-handle:active { cursor: grabbing; }
 
 .widget-label {
   flex: 1;
   font-size: 12px;
   font-weight: 600;
-  color: #606266;
+  color: #1d1d1f;
+}
+
+.widget-resize-hint {
+  color: #86868b;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .widget-inner {

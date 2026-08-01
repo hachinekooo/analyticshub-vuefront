@@ -56,7 +56,7 @@ const { t } = useI18n()
           <el-icon class="el-icon--left"><Refresh /></el-icon>
           {{ t('buttons.applyFilters') }}
         </el-button>
-        <el-button @click="emit('customize')">
+        <el-button type="primary" plain @click="emit('customize')">
           <el-icon class="el-icon--left"><Setting /></el-icon>
           {{ t('metrics.customization.open') }}
         </el-button>
@@ -144,8 +144,8 @@ const { t } = useI18n()
   margin-bottom: 22px;
   background: white;
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.04);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .control-toolbar,
 .view-switcher,
@@ -157,7 +157,7 @@ const { t } = useI18n()
 .control-toolbar { justify-content: space-between; padding: 16px 18px; }
 .control-label,
 .filter-heading { color: var(--el-text-color-secondary); font-size: 12px; font-weight: 700; }
-.segmented-control { display: flex; gap: 3px; padding: 3px; background: var(--el-fill-color); border-radius: 10px; }
+.segmented-control { display: flex; gap: 3px; padding: 3px; background: #e8e8ed; border-radius: 9px; }
 .segmented-control button {
   min-width: 92px;
   padding: 8px 12px;
@@ -167,9 +167,9 @@ const { t } = useI18n()
   background: transparent;
   cursor: pointer;
 }
-.segmented-control button.is-active { color: var(--el-color-primary); font-weight: 700; background: white; box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1); }
+.segmented-control button.is-active { color: #1d1d1f; font-weight: 600; background: white; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14); }
 .filter-section { padding: 14px 18px; border-top: 1px solid var(--el-border-color-lighter); }
-.technical-filters { background: var(--el-color-primary-light-9); }
+.technical-filters { background: #fafafa; }
 .filter-heading { margin-bottom: 10px; color: var(--el-text-color-primary); }
 .filter-form { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .filter-form :deep(.el-form-item) { margin: 0; }

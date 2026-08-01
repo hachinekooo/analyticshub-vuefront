@@ -12,7 +12,7 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const projectContext = useProjectContextStore()
-const { activeProjects, loading, selectedProject, selectedProjectId } = storeToRefs(projectContext)
+const { activeProjects, loading, selectedProjectId } = storeToRefs(projectContext)
 
 const projectScoped = computed(() => Boolean(route.meta.projectScoped))
 const routeProjectId = computed(() => typeof route.query.projectId === 'string' ? route.query.projectId : '')
@@ -60,94 +60,84 @@ onMounted(async () => {
 
 <template>
   <div class="admin-shell">
-    <aside class="shell-sidebar">
+    <header class="shell-header">
       <button class="brand" type="button" @click="navigate('/', false)">
         <span class="brand-mark">AH</span>
         <span>
           <strong>AnalyticsHub</strong>
-          <small>{{ t('shell.internalCenter') }}</small>
         </span>
       </button>
 
       <nav class="shell-nav" :aria-label="t('shell.mainNavigation')">
-        <template v-for="item in navItems" :key="item.path">
-          <div v-if="item.path === '/metrics'" class="nav-section-label">
-            {{ t('shell.projectWorkspace') }}
-          </div>
-          <button
-            type="button"
-            class="nav-item"
-            :class="{ 'is-active': route.path === item.path }"
-            :disabled="item.projectScoped && !selectedProjectId"
-            @click="navigate(item.path, item.projectScoped)"
-          >
-            <el-icon><component :is="item.icon" /></el-icon>
-            <span>{{ item.label }}</span>
-          </button>
-        </template>
+        <button
+          v-for="item in navItems"
+          :key="item.path"
+          type="button"
+          class="nav-item"
+          :class="{ 'is-active': route.path === item.path }"
+          :disabled="item.projectScoped && !selectedProjectId"
+          @click="navigate(item.path, item.projectScoped)"
+        >
+          <span>{{ item.label }}</span>
+        </button>
       </nav>
 
-      <div class="sidebar-footer">
+      <div class="header-actions">
+        <div v-if="projectScoped" class="project-context">
+          <span class="project-context-label">{{ t('shell.currentProject') }}</span>
+          <el-select
+            :model-value="selectedProjectId"
+            filterable
+            :loading="loading"
+            :placeholder="t('filters.selectProject')"
+            class="project-switcher"
+            @change="changeProject"
+          >
+            <el-option
+              v-for="project in activeProjects"
+              :key="project.id"
+              :label="`${project.projectName} · ${project.projectId}`"
+              :value="project.projectId"
+            />
+          </el-select>
+        </div>
         <LanguageToggle />
       </div>
-    </aside>
+    </header>
 
-    <div class="shell-main">
-      <header v-if="projectScoped" class="project-bar">
-        <div class="project-context-copy">
-          <span>{{ t('shell.currentProject') }}</span>
-          <strong>{{ selectedProject?.projectName || t('filters.selectProject') }}</strong>
-        </div>
-        <el-select
-          :model-value="selectedProjectId"
-          filterable
-          :loading="loading"
-          :placeholder="t('filters.selectProject')"
-          class="project-switcher"
-          @change="changeProject"
-        >
-          <el-option
-            v-for="project in activeProjects"
-            :key="project.id"
-            :label="`${project.projectName} · ${project.projectId}`"
-            :value="project.projectId"
-          />
-        </el-select>
-      </header>
-
-      <main class="shell-content">
-        <RouterView />
-      </main>
-    </div>
+    <main class="shell-content">
+      <RouterView />
+    </main>
   </div>
 </template>
 
 <style scoped>
 .admin-shell {
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: 248px minmax(0, 1fr);
+  background: #f5f5f7;
 }
 
-.shell-sidebar {
+.shell-header {
   position: sticky;
   top: 0;
-  height: 100vh;
+  z-index: 2000;
   box-sizing: border-box;
   display: flex;
-  flex-direction: column;
-  padding: 22px 16px;
-  color: #f5f7fb;
-  background: #111827;
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  align-items: center;
+  min-height: 64px;
+  padding: 0 max(24px, calc((100vw - 1500px) / 2));
+  color: #1d1d1f;
+  background: rgba(250, 250, 252, 0.94);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  backdrop-filter: saturate(180%) blur(20px);
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 8px;
+  flex: 0 0 auto;
+  gap: 10px;
+  padding: 8px 10px 8px 0;
   color: inherit;
   text-align: left;
   border: 0;
@@ -156,98 +146,62 @@ onMounted(async () => {
 }
 
 .brand-mark {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   color: white;
   font-size: 13px;
-  font-weight: 800;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  border-radius: 11px;
-}
-
-.brand strong,
-.brand small { display: block; }
-.brand strong { font-size: 15px; }
-.brand small { margin-top: 2px; color: #94a3b8; font-size: 11px; }
-
-.shell-nav { margin-top: 34px; }
-.nav-section-label {
-  margin: 26px 10px 8px;
-  color: #64748b;
-  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  background: #0071e3;
+  border-radius: 9px;
 }
+
+.brand strong { display: block; font-size: 15px; letter-spacing: -0.01em; }
+
+.shell-nav { display: flex; align-items: stretch; align-self: stretch; margin-left: 24px; }
 
 .nav-item {
-  width: 100%;
   display: flex;
   align-items: center;
-  gap: 11px;
-  margin: 3px 0;
-  padding: 11px 12px;
-  color: #cbd5e1;
-  font-size: 14px;
-  text-align: left;
+  margin: 0;
+  padding: 0 15px;
+  color: #515154;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
   border: 0;
-  border-radius: 10px;
+  border-bottom: 2px solid transparent;
   background: transparent;
   cursor: pointer;
 }
-.nav-item:hover:not(:disabled) { color: white; background: rgba(255, 255, 255, 0.07); }
-.nav-item.is-active { color: white; background: #2563eb; }
+.nav-item:hover:not(:disabled) { color: #0071e3; }
+.nav-item.is-active { color: #1d1d1f; font-weight: 600; border-bottom-color: #0071e3; }
 .nav-item:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.sidebar-footer { margin-top: auto; padding: 8px; }
-.shell-main { min-width: 0; }
-.project-bar {
-  min-height: 68px;
-  box-sizing: border-box;
+.header-actions,
+.project-context {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 12px 28px;
-  background: rgba(255, 255, 255, 0.92);
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  backdrop-filter: blur(16px);
+  gap: 10px;
 }
-.project-context-copy span,
-.project-context-copy strong { display: block; }
-.project-context-copy span { color: var(--el-text-color-secondary); font-size: 11px; }
-.project-context-copy strong { margin-top: 3px; font-size: 14px; }
-.project-switcher { width: min(360px, 48vw); }
-.shell-content { min-width: 0; padding: 32px; }
+.header-actions { margin-left: auto; }
+.project-context-label { color: #6e6e73; font-size: 12px; white-space: nowrap; }
+.project-switcher { width: min(310px, 30vw); }
+.shell-content { min-width: 0; padding: 36px 32px 56px; }
 
-@media (max-width: 900px) {
-  .admin-shell { grid-template-columns: 76px minmax(0, 1fr); }
-  .shell-sidebar { padding-inline: 10px; }
-  .brand > span:last-child,
-  .nav-item span,
-  .nav-section-label { display: none; }
-  .brand,
-  .nav-item { justify-content: center; }
+@media (max-width: 1080px) {
+  .shell-header { flex-wrap: wrap; padding: 8px 20px; }
+  .shell-nav { order: 3; width: 100%; height: 42px; margin: 4px 0 -8px; overflow-x: auto; }
+  .nav-item { flex: 1; justify-content: center; min-width: max-content; }
+  .project-switcher { width: min(300px, 38vw); }
   .shell-content { padding: 22px 16px; }
 }
 
 @media (max-width: 600px) {
-  .admin-shell { display: block; }
-  .shell-sidebar {
-    position: static;
-    width: 100%;
-    height: auto;
-    flex-direction: row;
-    align-items: center;
-    gap: 4px;
-  }
-  .brand { width: auto; }
-  .shell-nav { display: flex; margin: 0 0 0 auto; }
-  .nav-item { width: auto; }
-  .sidebar-footer { display: none; }
-  .project-bar { align-items: flex-start; flex-direction: column; padding: 12px 16px; }
-  .project-switcher { width: 100%; }
+  .brand > span:last-child,
+  .project-context-label { display: none; }
+  .header-actions { min-width: 0; }
+  .project-switcher { width: min(230px, 55vw); }
 }
 </style>

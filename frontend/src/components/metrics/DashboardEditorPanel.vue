@@ -34,7 +34,7 @@ const { t } = useI18n()
           <el-icon class="el-icon--left"><Brush /></el-icon>
           {{ t('metrics.resetLayout') }}
         </el-button>
-        <el-button type="success" :loading="saving" @click="emit('save')">
+        <el-button type="primary" :loading="saving" @click="emit('save')">
           <el-icon class="el-icon--left"><Finished /></el-icon>
           {{ t('metrics.saveDashboard') }}
         </el-button>
@@ -77,12 +77,13 @@ const { t } = useI18n()
 
 <style scoped>
 .editor-panel {
-  margin-bottom: 22px;
-  padding: 20px;
-  color: #e2e8f0;
-  background: linear-gradient(135deg, #172033, #111827);
-  border-radius: 16px;
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
+  margin-bottom: 16px;
+  padding: 16px 18px;
+  color: #1d1d1f;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .editor-intro,
 .editor-actions,
@@ -90,17 +91,17 @@ const { t } = useI18n()
 .widget-tags { display: flex; gap: 12px; }
 .editor-intro { align-items: flex-start; justify-content: space-between; }
 .editor-actions { flex-wrap: wrap; }
-.eyebrow { color: #60a5fa; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
-h2 { margin: 6px 0; color: white; font-size: 21px; }
-h3 { margin: 0 0 6px; color: white; font-size: 14px; }
-p { margin: 0; color: #94a3b8; font-size: 12px; line-height: 1.6; }
-.editor-grid { margin-top: 20px; }
-.editor-section { flex: 1; min-width: 0; padding: 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; }
+.eyebrow { color: #0071e3; font-size: 11px; font-weight: 700; letter-spacing: 0.05em; }
+h2 { margin: 4px 0; color: #1d1d1f; font-size: 19px; letter-spacing: -0.01em; }
+h3 { margin: 0 0 6px; color: #1d1d1f; font-size: 13px; }
+p { margin: 0; color: #6e6e73; font-size: 12px; line-height: 1.5; }
+.editor-grid { margin-top: 14px; }
+.editor-section { flex: 1; min-width: 0; padding: 13px 14px; background: #f5f5f7; border: 1px solid rgba(0, 0, 0, 0.06); border-radius: 10px; }
 .widget-tags { margin-top: 12px; flex-wrap: wrap; }
 .widget-library { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin-top: 12px; }
 .extension-help { margin-top: 4px; }
-.widget-library button { display: flex; align-items: center; gap: 8px; padding: 10px; color: #dbeafe; text-align: left; border: 1px solid rgba(96, 165, 250, 0.25); border-radius: 9px; background: rgba(37, 99, 235, 0.12); cursor: pointer; }
-.widget-library button:hover { background: rgba(37, 99, 235, 0.28); }
+.widget-library button { display: flex; align-items: center; gap: 8px; padding: 9px 10px; color: #0066cc; text-align: left; border: 1px solid rgba(0, 113, 227, 0.22); border-radius: 8px; background: white; cursor: pointer; }
+.widget-library button:hover { border-color: #0071e3; background: #f0f7ff; }
 @media (max-width: 900px) {
   .editor-intro,
   .editor-grid { flex-direction: column; }
