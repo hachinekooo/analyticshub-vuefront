@@ -9,7 +9,7 @@
           </div>
           
         </div>
-        <div class="header-actions">
+        <div class="header-actions header-navigation">
           <el-button-group class="nav-group">
             <el-button :type="isProjectsRoute ? 'primary' : 'default'" @click="goProjects">
               <el-icon class="el-icon--left"><FolderOpened /></el-icon>
@@ -28,6 +28,13 @@
               {{ t('nav.privacyRequests') }}
             </el-button>
           </el-button-group>
+          <LanguageToggle />
+        </div>
+      </div>
+
+      <div class="workspace-toolbar">
+        <div class="workspace-switcher">
+          <span class="toolbar-label">{{ t('metrics.workspace') }}</span>
           <div class="custom-segmented-control">
             <button
               type="button"
@@ -48,66 +55,96 @@
               {{ t('metrics.spaces.technical') }}
             </button>
           </div>
-          <div class="divider-vertical"></div>
-          <LanguageToggle />
-          
-          <el-tooltip :content="t('metrics.resetLayout')" placement="top">
-            <el-button :aria-label="t('metrics.resetLayout')" @click="resetToDefaultLayout" circle plain>
-              <el-icon><Brush /></el-icon>
-            </el-button>
-          </el-tooltip>
-
-          <el-tooltip :content="t('buttons.refresh')" placement="top">
-            <el-button :aria-label="t('buttons.refresh')" type="primary" :loading="refreshing" @click="refreshAll" circle plain>
-              <el-icon><Refresh /></el-icon>
-            </el-button>
-          </el-tooltip>
-
-          <el-tooltip :content="t('buttons.edit')" placement="top">
-            <el-button :aria-label="t('buttons.edit')" @click="isLayoutEditable = !isLayoutEditable" :type="isLayoutEditable ? 'warning' : 'default'" circle plain>
-              <el-icon><Setting /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip v-if="isLayoutEditable" :content="t('metrics.saveDashboard')" placement="top">
-            <el-button :aria-label="t('metrics.saveDashboard')" type="success" :loading="dashboardSaving" circle plain @click="saveServerDashboard">
-              <el-icon><Finished /></el-icon>
-            </el-button>
-          </el-tooltip>
+        </div>
+        <div class="workspace-actions">
+          <el-button type="primary" :loading="refreshing" @click="applyFilters">
+            <el-icon class="el-icon--left"><Refresh /></el-icon>
+            {{ t('buttons.applyFilters') }}
+          </el-button>
+          <el-button @click="isLayoutEditable = !isLayoutEditable" :type="isLayoutEditable ? 'warning' : 'default'">
+            <el-icon class="el-icon--left"><Setting /></el-icon>
+            {{ isLayoutEditable ? t('buttons.finishEditing') : t('buttons.editLayout') }}
+          </el-button>
+          <el-button v-if="isLayoutEditable" @click="resetToDefaultLayout" plain>
+            <el-icon class="el-icon--left"><Brush /></el-icon>
+            {{ t('metrics.resetLayout') }}
+          </el-button>
+          <el-button v-if="isLayoutEditable" type="success" :loading="dashboardSaving" @click="saveServerDashboard">
+            <el-icon class="el-icon--left"><Finished /></el-icon>
+            {{ t('metrics.saveDashboard') }}
+          </el-button>
         </div>
       </div>
-      
-      <div class="filter-bar-compact">
-        <el-form :model="filters" inline class="compact-form">
-          <el-select v-model="filters.projectId" :placeholder="t('filters.selectProject')" filterable style="width: 160px">
-            <el-option
-              v-for="project in projects"
-              :key="project.id"
-              :label="project.projectName"
-              :value="project.projectId"
+
+      <div class="filter-panel">
+        <div class="filter-panel-title">{{ t('metrics.commonFilters') }}</div>
+        <el-form :model="filters" inline class="compact-form" label-position="top">
+          <el-form-item :label="t('filters.project')">
+            <el-select v-model="filters.projectId" :placeholder="t('filters.selectProject')" filterable style="width: 220px">
+              <el-option
+                v-for="project in projects"
+                :key="project.id"
+                :label="`${project.projectName} · ${project.projectId}`"
+                :value="project.projectId"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('filters.dateRange')">
+            <el-date-picker
+              v-model="filters.dateRange"
+              type="daterange"
+              unlink-panels
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              :start-placeholder="t('filters.startDate')"
+              :end-placeholder="t('filters.endDate')"
+              :range-separator="t('filters.rangeSeparator')"
+              clearable
+              style="width: 280px"
             />
-          </el-select>
-          <el-date-picker
-            v-model="filters.dateRange"
-            type="daterange"
-            unlink-panels
-            format="YYYY-MM-DD"
-            value-format="YYYY-MM-DD"
-            style="width: 240px"
-          />
-          <el-select v-model="filters.granularity" style="width: 100px" v-if="activeSpace === 'operations'">
-            <el-option :label="t('filters.hourly')" value="hour" />
-            <el-option :label="t('filters.daily')" value="day" />
-          </el-select>
-          
-          <template v-if="activeSpace === 'technical'">
-             <el-input v-model="filters.userId" :placeholder="t('filters.userId')" clearable style="width: 120px" />
-             <el-input v-model="filters.deviceId" :placeholder="t('filters.deviceId')" clearable style="width: 120px" />
-             <el-select v-model="filters.platform" style="width: 100px">
-                <el-option :label="t('filters.platformWeb')" value="web" />
-                <el-option :label="t('filters.platformApp')" value="app" />
-             </el-select>
-          </template>
+          </el-form-item>
+          <el-form-item v-if="activeSpace === 'operations'" :label="t('filters.granularity')">
+            <el-select v-model="filters.granularity" style="width: 120px">
+              <el-option :label="t('filters.hourly')" value="hour" />
+              <el-option :label="t('filters.daily')" value="day" />
+            </el-select>
+          </el-form-item>
         </el-form>
+      </div>
+
+      <div v-if="activeSpace === 'technical'" class="filter-panel detail-filter-panel">
+        <div class="filter-panel-title">{{ t('metrics.detailFilters') }}</div>
+        <el-form :model="filters" inline class="compact-form" label-position="top">
+          <el-form-item :label="t('filters.platform')">
+            <div class="custom-segmented-control platform-segmented-control">
+              <button
+                type="button"
+                class="segment-item"
+                :class="{ 'is-active': filters.platform === 'web' }"
+                :aria-pressed="filters.platform === 'web'"
+                @click="selectPlatform('web')"
+              >
+                {{ t('filters.platformWeb') }}
+              </button>
+              <button
+                type="button"
+                class="segment-item"
+                :class="{ 'is-active': filters.platform === 'app' }"
+                :aria-pressed="filters.platform === 'app'"
+                @click="selectPlatform('app')"
+              >
+                {{ t('filters.platformApp') }}
+              </button>
+            </div>
+          </el-form-item>
+          <el-form-item :label="t('filters.userId')">
+            <el-input v-model="filters.userId" :placeholder="t('filters.placeholders.userId')" clearable style="width: 180px" />
+          </el-form-item>
+          <el-form-item :label="t('filters.deviceId')">
+            <el-input v-model="filters.deviceId" :placeholder="t('filters.placeholders.deviceId')" clearable style="width: 180px" />
+          </el-form-item>
+        </el-form>
+        <p class="filter-help">{{ t('metrics.detailFilterHelp') }}</p>
       </div>
 
       <div v-if="isLayoutEditable" class="widget-palette">
@@ -182,7 +219,7 @@
                        <p class="mini-value">{{ val }}</p>
                     </div>
                   </div>
-                  <el-empty v-else description="No Data" :image-size="60" />
+                  <el-empty v-else :description="t('metrics.noData')" :image-size="60" />
                 </div>
 
                 <!-- Trends Widget -->
@@ -529,6 +566,7 @@ import { ElMessage } from 'element-plus'
 import LanguageToggle from '@/components/LanguageToggle.vue'
 import CounterWidget from '@/features/counters/CounterWidget.vue'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import { trafficMetricTypeForPlatform, type TrafficPlatform } from '@/utils/metricsFilters'
 import { resolveProjectSelection } from '@/utils/projectSelection'
 import {
   getDashboardWidgetExtension,
@@ -564,7 +602,6 @@ import {
   getTrafficSummary,
   getTrafficTrends,
   getTopPages,
-  getTopReferrers,
   getCounterEventTypes,
   type MetricsOverview,
   type MetricsTopEvents,
@@ -579,7 +616,6 @@ import {
   type TrafficGranularity,
   type TrafficTrends,
   type TopPageItem,
-  type TopReferrerItem,
   getProductFunnel,
   getProductRetention,
   type FunnelResponse,
@@ -653,14 +689,8 @@ const filters = reactive({
   sessionId: '',
   apiKey: '',
   isBanned: '',
-  metricType: '',
-  platform: 'web' as 'web' | 'app',
+  platform: 'web' as TrafficPlatform,
 })
-const extensionDateRange = computed<readonly [string, string] | null>(() =>
-  Array.isArray(filters.dateRange) && filters.dateRange.length === 2
-    ? [filters.dateRange[0]!, filters.dateRange[1]!] as const
-    : null,
-)
 const extensionRefreshToken = ref(0)
 
 type MetricsRequestSnapshot = Readonly<{
@@ -673,8 +703,7 @@ type MetricsRequestSnapshot = Readonly<{
   sessionId: string
   apiKey: string
   isBanned: string
-  metricType: string
-  platform: 'web' | 'app'
+  platform: TrafficPlatform
   eventsPage: number
   devicesPage: number
   sessionsPage: number
@@ -687,9 +716,12 @@ type ProjectRequestContext = {
   requestGeneration: number
   snapshot: MetricsRequestSnapshot
 }
+type AppliedMetricsFilters = Omit<MetricsRequestSnapshot,
+  'eventsPage' | 'devicesPage' | 'sessionsPage' | 'trafficPage'>
+
 let projectContextGeneration = 0
 let metricsRequestGeneration = 0
-const captureMetricsSnapshot = (): MetricsRequestSnapshot => ({
+const captureFilterSnapshot = (): AppliedMetricsFilters => ({
   dateRange: Array.isArray(filters.dateRange) ? [...filters.dateRange] : null,
   granularity: filters.granularity,
   topEventsLimit: filters.topEventsLimit,
@@ -699,8 +731,21 @@ const captureMetricsSnapshot = (): MetricsRequestSnapshot => ({
   sessionId: filters.sessionId,
   apiKey: filters.apiKey,
   isBanned: filters.isBanned,
-  metricType: filters.metricType,
   platform: filters.platform,
+})
+// `filters` is the editable form state; requests only read this committed snapshot.
+// This prevents half-entered filters from triggering competing request batches.
+const appliedFilters = ref<AppliedMetricsFilters>(captureFilterSnapshot())
+const extensionDateRange = computed<readonly [string, string] | null>(() =>
+  Array.isArray(appliedFilters.value.dateRange) && appliedFilters.value.dateRange.length === 2
+    ? [appliedFilters.value.dateRange[0]!, appliedFilters.value.dateRange[1]!] as const
+    : null,
+)
+const commitFilterSnapshot = () => {
+  appliedFilters.value = captureFilterSnapshot()
+}
+const captureMetricsSnapshot = (): MetricsRequestSnapshot => ({
+  ...appliedFilters.value,
   eventsPage: events.page,
   devicesPage: devices.page,
   sessionsPage: sessions.page,
@@ -728,7 +773,6 @@ const trends = ref<MetricsTrends | null>(null)
 const topEvents = ref<MetricsTopEvents | null>(null)
 const trafficTrends = ref<TrafficTrends | null>(null)
 const topPages = ref<TopPageItem[]>([])
-const topReferrers = ref<TopReferrerItem[]>([])
 const trafficSummary = ref<TrafficSummary | null>(null)
 const productFunnel = ref<FunnelResponse | null>(null)
 const retention = ref<RetentionResponse | null>(null)
@@ -768,7 +812,6 @@ const sessionsLoading = ref(false)
 const trafficLoading = ref(false)
 const trafficTrendsLoading = ref(false)
 const topPagesLoading = ref(false)
-const topReferrersLoading = ref(false)
 const productFunnelLoading = ref(false)
 const retentionLoading = ref(false)
 
@@ -1317,7 +1360,7 @@ const toServerDefinition = (): DashboardDefinition | null => {
   }
   return {
     schemaVersion: 1,
-    defaultRange: filters.dateRange ? 'custom' : '7d',
+    defaultRange: appliedFilters.value.dateRange ? 'custom' : '7d',
     widgets,
   }
 }
@@ -1485,16 +1528,12 @@ const loadOverview = async (context: ProjectRequestContext = captureProjectConte
     const params = cleanParams({ projectId: context.projectId, ...rangeParams(context.snapshot) })
     const [overviewRes, trafficRes] = await Promise.all([
       getMetricsOverview(params),
-      context.snapshot.platform === 'web'
-        ? getTrafficSummary({ ...params, granularity: context.snapshot.granularity })
-        : Promise.resolve(null)
+      getTrafficSummary({ ...params, granularity: context.snapshot.granularity }),
     ])
     
     if (!isCurrentProjectContext(context)) return
     overview.value = overviewRes.data.data
-    if (trafficRes && 'data' in trafficRes) {
-      trafficSummary.value = trafficRes.data.data
-    }
+    trafficSummary.value = trafficRes.data.data
   } catch (error) {
     if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.overviewFailed')))
   } finally {
@@ -1638,40 +1677,13 @@ const loadTopPages = async (context: ProjectRequestContext = captureProjectConte
   }
 }
 
-const loadTopReferrers = async (context: ProjectRequestContext = captureProjectContext()) => {
-  if (!requireProject()) return
-  topReferrersLoading.value = true
-  try {
-    const res = await getTopReferrers(cleanParams({ projectId: context.projectId, limit: context.snapshot.topEventsLimit, ...rangeParams(context.snapshot) }))
-    if (!isCurrentProjectContext(context)) return
-    topReferrers.value = res.data.data.items
-  } catch (error) {
-    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.topReferrersFailed')))
-  } finally {
-    if (isCurrentProjectContext(context)) topReferrersLoading.value = false
-  }
-}
-
 const loadTraffic = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
   const config = configForWidget('core.traffic')
   const pageSize = typeof config.pageSize === 'number' ? config.pageSize : traffic.pageSize
-  const metricType = typeof config.metricType === 'string' ? config.metricType : context.snapshot.metricType
+  const metricType = trafficMetricTypeForPlatform(context.snapshot.platform)
   trafficLoading.value = true
   try {
-    if (context.snapshot.platform === 'web') {
-      const summaryRes = await getTrafficSummary(cleanParams({ 
-        projectId: context.projectId,
-        granularity: context.snapshot.granularity,
-        ...rangeParams(context.snapshot)
-      }))
-      if (!isCurrentProjectContext(context)) return
-      trafficSummary.value = summaryRes.data.data
-      await Promise.all([loadTrafficTrends(context), loadTopPages(context), loadTopReferrers(context)])
-    } else {
-      if (!isCurrentProjectContext(context)) return
-      trafficSummary.value = null; trafficTrends.value = null; topPages.value = []; topReferrers.value = []
-    }
     const res = await getTrafficMetrics(cleanParams({ projectId: context.projectId, page: context.snapshot.trafficPage, pageSize, metricType, userId: context.snapshot.userId, deviceId: context.snapshot.deviceId, sessionId: context.snapshot.sessionId, ...rangeParams(context.snapshot) }))
     if (!isCurrentProjectContext(context)) return
     Object.assign(traffic, res.data.data)
@@ -1750,14 +1762,46 @@ const resetPages = () => {
   events.page = 1; devices.page = 1; sessions.page = 1; traffic.page = 1
 }
 
-const handleEventsPageChange = (page: number) => { events.page = page; loadEvents() }
-const handleDevicesPageChange = (page: number) => { devices.page = page; loadDevices() }
-const handleSessionsPageChange = (page: number) => { sessions.page = page; loadSessions() }
-const handleTrafficPageChange = (page: number) => { traffic.page = page; loadTraffic() }
+const beginTargetedRequestContext = () => {
+  metricsRequestGeneration += 1
+  clearLoadingStates()
+  return captureProjectContext()
+}
+
+const handleEventsPageChange = (page: number) => {
+  events.page = page
+  void loadEvents(beginTargetedRequestContext())
+}
+const handleDevicesPageChange = (page: number) => {
+  devices.page = page
+  void loadDevices(beginTargetedRequestContext())
+}
+const handleSessionsPageChange = (page: number) => {
+  sessions.page = page
+  void loadSessions(beginTargetedRequestContext())
+}
+const handleTrafficPageChange = (page: number) => {
+  traffic.page = page
+  void loadTraffic(beginTargetedRequestContext())
+}
+
+const applyFilters = async () => {
+  if (!requireProject()) return
+  resetPages()
+  commitFilterSnapshot()
+  await refreshAll()
+}
+
+const selectPlatform = (platform: TrafficPlatform) => {
+  if (filters.platform === platform) return
+  filters.platform = platform
+  appliedFilters.value = { ...appliedFilters.value, platform }
+  traffic.page = 1
+  void loadTraffic(beginTargetedRequestContext())
+}
 
 const refreshAll = async () => {
   if (!requireProject()) return
-  resetPages()
   extensionRefreshToken.value += 1
   const context = beginRefreshContext()
   const widgetTypes = dashboardLayout.value.map((item) => resolvedWidgetType(item))
@@ -1938,13 +1982,27 @@ const loadProjects = async () => {
 
 const layoutVisible = ref(false)
 
+const clearLoadingStates = () => {
+  overviewLoading.value = false
+  trendsLoading.value = false
+  topEventsLoading.value = false
+  eventsLoading.value = false
+  devicesLoading.value = false
+  sessionsLoading.value = false
+  trafficLoading.value = false
+  trafficTrendsLoading.value = false
+  topPagesLoading.value = false
+  productFunnelLoading.value = false
+  retentionLoading.value = false
+  refreshing.value = false
+}
+
 const clearProjectScopedState = () => {
   overview.value = null
   trends.value = null
   topEvents.value = null
   trafficTrends.value = null
   topPages.value = []
-  topReferrers.value = []
   trafficSummary.value = null
   productFunnel.value = null
   retention.value = null
@@ -1956,99 +2014,99 @@ const clearProjectScopedState = () => {
   Object.assign(devices, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
   Object.assign(sessions, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
   Object.assign(traffic, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
-  overviewLoading.value = false
-  trendsLoading.value = false
-  topEventsLoading.value = false
-  eventsLoading.value = false
-  devicesLoading.value = false
-  sessionsLoading.value = false
-  trafficLoading.value = false
-  trafficTrendsLoading.value = false
-  topPagesLoading.value = false
-  topReferrersLoading.value = false
-  productFunnelLoading.value = false
-  retentionLoading.value = false
-  refreshing.value = false
+  clearLoadingStates()
 }
 
 // --- 8. Watchers & Lifecycle ---
-watch(activeSpace, async () => {
-  metricsRequestGeneration += 1
-  const space = activeSpace.value
-  const projectGeneration = projectContextGeneration
-  layoutVisible.value = false // 1. 强制销毁组件
-  isLayoutEditable.value = false
-  dashboardLayout.value = []
-  
-  await nextTick()
-  // 增加微小延迟，确保 DOM 容器宽度计算完成，防止布局挤死在左侧
-  setTimeout(async () => {
-    if (space !== activeSpace.value || projectGeneration !== projectContextGeneration) return
-    await loadLayout()
-    if (space !== activeSpace.value || projectGeneration !== projectContextGeneration) return
-    if (filters.projectId) await refreshAll()
-    if (space !== activeSpace.value || projectGeneration !== projectContextGeneration) return
-    layoutVisible.value = true
-    nextTick(() => {
-      handleResize() // Ensure charts are sized correctly after space switch
-      updateBusinessTrendsChart()
-      updateTrafficTrendsChart()
-    })
-  }, 100)
-})
+let workspaceGeneration = 0
+let bootstrapping = true
 
-watch(() => filters.projectId, async () => {
+const disposeWorkspaceCharts = () => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  for (const [id, chart] of Object.entries(chartInstances)) {
+    chart.dispose()
+    delete chartInstances[id]
+  }
+}
+
+const resetProjectDetailFilters = () => {
+  filters.userId = ''
+  filters.deviceId = ''
+  filters.sessionId = ''
+  filters.apiKey = ''
+  filters.isBanned = ''
+  filters.eventType = ''
+  filters.platform = 'web'
+}
+
+const activateWorkspace = async (projectChanged: boolean) => {
+  const generation = ++workspaceGeneration
   projectContextGeneration += 1
   metricsRequestGeneration += 1
-  const context = captureProjectContext()
+  const projectId = filters.projectId
+  const space = activeSpace.value
+
   layoutVisible.value = false
-  serverDashboards.value = []
+  isLayoutEditable.value = false
   dashboardLayout.value = []
-  clearProjectScopedState()
-  if (filters.projectId && routeProjectId.value !== filters.projectId) {
-    await router.replace({ path: '/metrics', query: { projectId: filters.projectId } })
+  clearLoadingStates()
+  disposeWorkspaceCharts()
+  if (projectChanged) {
+    serverDashboards.value = []
+    clearProjectScopedState()
   }
+
+  if (projectId && routeProjectId.value !== projectId) {
+    await router.replace({ path: '/metrics', query: { projectId } })
+  }
+  if (generation !== workspaceGeneration
+    || projectId !== filters.projectId
+    || space !== activeSpace.value) return
+
+  await nextTick()
   await loadLayout()
-  if (!isCurrentProjectScope(context)) return
+  if (generation !== workspaceGeneration
+    || projectId !== filters.projectId
+    || space !== activeSpace.value) return
+
   resetPages()
-  if (filters.projectId) await refreshAll()
-  if (!isCurrentProjectScope(context)) return
+  commitFilterSnapshot()
   layoutVisible.value = true
+  await nextTick()
+  if (projectId) await refreshAll()
+  if (generation !== workspaceGeneration
+    || projectId !== filters.projectId
+    || space !== activeSpace.value) return
+
+  handleResize()
+  updateBusinessTrendsChart()
+  updateTrafficTrendsChart()
+}
+
+watch(activeSpace, () => {
+  if (!bootstrapping) void activateWorkspace(false)
 })
 
-watch(() => filters.platform, async () => {
-  if (filters.platform === 'web') {
-    if (!filters.metricType) filters.metricType = 'page_view'
-  } else {
-    if (!filters.metricType) filters.metricType = 'screen_view'
+watch(() => filters.projectId, () => {
+  if (bootstrapping) return
+  resetProjectDetailFilters()
+  void activateWorkspace(true)
+})
+
+watch(routeProjectId, (projectId) => {
+  if (bootstrapping || !projectId || projectId === filters.projectId) return
+  if (projects.value.some((project) => project.projectId === projectId)) {
+    filters.projectId = projectId
   }
-  traffic.page = 1
-  await loadTraffic()
 })
 
 watch(dashboardLayout, saveLayout, { deep: true })
 
 watch(trends, () => nextTick(updateBusinessTrendsChart))
 watch(trafficTrends, () => nextTick(updateTrafficTrendsChart))
-watch(() => [
-  filters.dateRange?.join('|') || '',
-  filters.granularity,
-  filters.topEventsLimit,
-  filters.eventType,
-  filters.userId,
-  filters.deviceId,
-  filters.sessionId,
-  filters.apiKey,
-  filters.isBanned,
-  filters.metricType,
-  filters.platform,
-], async () => {
-  await refreshAll()
-  nextTick(() => {
-    updateBusinessTrendsChart()
-    updateTrafficTrendsChart()
-  })
-})
 
 watch(isLayoutEditable, (val) => {
   if (!val) {
@@ -2056,27 +2114,19 @@ watch(isLayoutEditable, (val) => {
   }
 })
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('resize', handleResize)
-  setTimeout(async () => {
-    await loadProjects()
-    await loadLayout()
-    if (filters.projectId) await refreshAll()
-    layoutVisible.value = true
-    nextTick(() => {
-      updateBusinessTrendsChart()
-      updateTrafficTrendsChart()
-    })
-  }, 100)
+  await loadProjects()
+  // Let the project watcher consume the bootstrapping change before enabling it.
+  // This keeps the initial page load to one workspace activation and one request batch.
+  await nextTick()
+  bootstrapping = false
+  await activateWorkspace(true)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (resizeObserver) {
-    resizeObserver.disconnect()
-    resizeObserver = null
-  }
-  Object.values(chartInstances).forEach(chart => chart.dispose())
+  disposeWorkspaceCharts()
 })
 </script>
 
@@ -2104,16 +2154,70 @@ onUnmounted(() => {
   margin-bottom: 20px;
 }
 
-.filter-bar-compact {
+.workspace-toolbar {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding-top: 16px;
   border-top: 1px solid #f5f5f7;
 }
 
+.workspace-switcher,
+.workspace-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbar-label,
+.filter-panel-title {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.filter-panel {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--el-fill-color-lighter);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+}
+
+.filter-panel-title {
+  margin-bottom: 10px;
+  color: var(--el-text-color-primary);
+}
+
+.detail-filter-panel {
+  background: var(--el-color-primary-light-9);
+}
+
+.filter-help {
+  margin: 2px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.compact-form {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .compact-form :deep(.el-form-item) {
   margin-bottom: 0;
-  margin-right: 12px;
+  margin-right: 0;
+}
+
+.compact-form :deep(.el-form-item__label) {
+  height: auto;
+  padding-bottom: 6px;
+  line-height: 1.2;
 }
 
 .workspace-area {
@@ -2352,18 +2456,52 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-.divider-vertical {
-  width: 1px;
-  height: 20px;
-  background: #e4e7ed;
-  margin: 0 4px;
+.platform-segmented-control .segment-item {
+  min-width: 88px;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1180px) {
   .header-main {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
+  }
+
+  .header-navigation,
+  .workspace-toolbar {
+    width: 100%;
+  }
+
+  .workspace-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-container {
+    padding: 20px 12px;
+  }
+
+  .header-card {
+    padding: 18px;
+  }
+
+  .nav-group {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .compact-form,
+  .compact-form :deep(.el-form-item),
+  .compact-form :deep(.el-form-item__content) {
+    width: 100%;
+  }
+
+  .compact-form :deep(.el-select),
+  .compact-form :deep(.el-date-editor),
+  .compact-form :deep(.el-input) {
+    width: 100% !important;
   }
 }
 
