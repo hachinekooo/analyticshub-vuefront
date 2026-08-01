@@ -5,28 +5,34 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'home',
-      alias: '/admin',
-      component: () => import('../views/AdminDashboard.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/metrics',
-      name: 'metrics',
-      component: () => import('../views/AdminMetrics.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/privacy-requests',
-      name: 'privacy-requests',
-      component: () => import('../views/PrivacyRequests.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/semantics',
-      name: 'semantics',
-      component: () => import('../views/SemanticDictionary.vue'),
-      meta: { requiresAuth: true }
+      component: () => import('../layouts/AdminShell.vue'),
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'home',
+          alias: 'admin',
+          component: () => import('../views/AdminDashboard.vue'),
+        },
+        {
+          path: 'metrics',
+          name: 'metrics',
+          component: () => import('../views/AdminMetrics.vue'),
+          meta: { projectScoped: true },
+        },
+        {
+          path: 'privacy-requests',
+          name: 'privacy-requests',
+          component: () => import('../views/PrivacyRequests.vue'),
+          meta: { projectScoped: true },
+        },
+        {
+          path: 'semantics',
+          name: 'semantics',
+          component: () => import('../views/SemanticDictionary.vue'),
+          meta: { projectScoped: true },
+        },
+      ],
     },
     {
       path: '/login',

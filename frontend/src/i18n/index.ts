@@ -31,15 +31,22 @@ const messages = {
   en: {
     nav: {
       projects: 'Projects',
-      metrics: 'Metrics',
-      semantics: 'Semantic Dictionary',
+      metrics: 'Operations Center',
+      semantics: 'Event Dictionary',
       privacyRequests: 'Privacy Tickets',
     },
+    shell: {
+      internalCenter: 'Internal operations center',
+      mainNavigation: 'Main navigation',
+      projectWorkspace: 'Project workspace',
+      currentProject: 'Current project',
+    },
     dashboard: {
-      title: '📊 Analytics System',
+      title: 'Project Management',
       subtitle: 'Manage project configurations and data pipelines',
       empty: 'No projects found. Click the button above to add one.',
       viewMetrics: 'View Metrics',
+      inactiveHint: 'Enable this project to open its workspace',
       labels: {
         id: 'ID',
         db: 'DB',
@@ -132,12 +139,25 @@ const messages = {
       commonFilters: 'Data scope',
       detailFilters: 'Detailed record filters',
       detailFilterHelp: 'Website shows page visits; App shows in-app screen visits. Switching data types refreshes the table immediately.',
+      openDictionary: 'Manage event key mappings',
       addWidget: 'Add Widget',
       resetLayout: 'Reset Layout',
       saveDashboard: 'Save project dashboard',
       dashboardSaved: 'Project dashboard saved',
       dashboardSaveFailed: 'Failed to save project dashboard',
       dashboardUnsupportedWidget: 'The layout contains an unsupported widget',
+      customization: {
+        open: 'Customize dashboard',
+        eyebrow: 'Project customization',
+        title: 'Dashboard editor',
+        description: 'Drag and resize cards below, add widgets from the library, then save this project layout.',
+        current: 'Current widgets',
+        dragHelp: 'Cards become draggable and resizable while this editor is open.',
+        library: 'Widget library',
+        registered: '{count} trusted custom widgets are registered in this build.',
+        extensionHelp: 'Project-specific Vue widgets are registered by the deployment team at build time; this page manages registered widgets and project layouts.',
+        allAdded: 'All available widgets are already on this dashboard',
+      },
       spaces: {
         operations: 'Operations',
         technical: 'Detailed Data',
@@ -332,9 +352,19 @@ const messages = {
       visitors: 'Visitors',
     },
     semantics: {
-      title: 'Semantic Dictionary',
+      title: 'Event Dictionary & Key Mapping',
       subtitle: 'Map changing raw event keys to stable, project-specific business meanings',
       unmapped: 'Unmapped',
+      searchPlaceholder: 'Search raw keys, meanings, aliases, or categories',
+      mappingGuide: {
+        title: 'One business meaning can include multiple raw event keys',
+        description: 'Use this when event names change between app versions. Reports show the stable display name while retaining raw keys for audit and diagnosis.',
+      },
+      filters: {
+        all: 'All events',
+        mapped: 'Mapped only',
+        unmapped: 'Unmapped only',
+      },
       summary: {
         raw: '{count} raw events',
         mapped: '{count} mapped',
@@ -370,6 +400,14 @@ const messages = {
         deleteTitle: 'Delete Semantic Meaning',
         deleteMessage: 'Delete {key} and all of its raw-key mappings?',
       },
+      mappingDialog: {
+        title: 'Map raw event key',
+        rawKey: 'Raw event key: {key}',
+        existingMeaning: 'Map to an existing business meaning',
+        selectMeaning: 'Select a business meaning',
+        createNew: 'Create a new meaning instead',
+        confirm: 'Create mapping',
+      },
       messages: {
         saved: 'Semantic mapping saved',
         deleted: 'Semantic mapping deleted',
@@ -391,6 +429,7 @@ const messages = {
         status: 'Status',
         type: 'Type',
         processor: 'Processor',
+        queue: 'Queue',
         openOnly: 'Open queue',
       },
       tables: {
@@ -493,15 +532,22 @@ const messages = {
   zh: {
     nav: {
       projects: '项目管理',
-      metrics: '运营数据',
-      semantics: '语义字典',
+      metrics: '运营中心',
+      semantics: '事件字典 / Key 映射',
       privacyRequests: '隐私工单',
     },
+    shell: {
+      internalCenter: '企业内部运营中心',
+      mainNavigation: '主导航',
+      projectWorkspace: '项目工作区',
+      currentProject: '当前项目',
+    },
     dashboard: {
-      title: '📊 运营管理中心',
+      title: '项目管理',
       subtitle: '管理项目配置与数据管道',
       empty: '暂无项目，请点击上方按钮添加。',
       viewMetrics: '查看指标',
+      inactiveHint: '启用项目后可进入工作区',
       labels: {
         id: '标识',
         db: '数据库',
@@ -594,12 +640,25 @@ const messages = {
       commonFilters: '数据范围',
       detailFilters: '明细筛选',
       detailFilterHelp: '官网显示网页访问记录，App 显示应用内页面访问记录；切换数据类型后会立即重新查询。',
+      openDictionary: '管理事件 Key 映射',
       addWidget: '添加组件',
       resetLayout: '重置布局',
       saveDashboard: '保存当前项目仪表盘',
       dashboardSaved: '项目仪表盘已保存',
       dashboardSaveFailed: '保存项目仪表盘失败',
       dashboardUnsupportedWidget: '布局中包含暂不支持的组件',
+      customization: {
+        open: '定制仪表盘',
+        eyebrow: '当前项目定制',
+        title: '仪表盘编辑器',
+        description: '在下方拖拽、缩放卡片，从组件库添加内容，完成后保存为当前项目布局。',
+        current: '当前组件',
+        dragHelp: '编辑器开启期间，下方卡片可以拖拽、缩放和移除。',
+        library: '组件库',
+        registered: '当前构建已注册 {count} 个可信自定义组件。',
+        extensionHelp: '项目专属 Vue 组件由部署方在编译期注册；本页面负责使用已注册组件并保存当前项目布局。',
+        allAdded: '当前可用组件都已添加',
+      },
       spaces: {
         operations: '运营概况',
         technical: '明细数据',
@@ -794,9 +853,19 @@ const messages = {
       visitors: '访问人数',
     },
     semantics: {
-      title: '语义字典',
+      title: '事件字典与 Key 映射',
       subtitle: '把会变化的原始埋点 Key 映射成稳定、项目专属的业务含义',
       unmapped: '未映射',
+      searchPlaceholder: '搜索原始 Key、业务含义、别名或分类',
+      mappingGuide: {
+        title: '一个业务含义可以包含多个原始事件 Key',
+        description: '适合埋点在不同 App 版本中改名的情况。报表统一显示稳定名称，同时保留原始 Key 用于审计和排查。',
+      },
+      filters: {
+        all: '全部事件',
+        mapped: '只看已映射',
+        unmapped: '只看未映射',
+      },
       summary: {
         raw: '{count} 个原始事件',
         mapped: '{count} 个已映射',
@@ -832,6 +901,14 @@ const messages = {
         deleteTitle: '删除业务含义',
         deleteMessage: '确认删除 {key} 及它的全部原始 Key 映射吗？',
       },
+      mappingDialog: {
+        title: '映射原始事件 Key',
+        rawKey: '当前原始事件 Key：{key}',
+        existingMeaning: '映射到已有业务含义',
+        selectMeaning: '请选择业务含义',
+        createNew: '改为新建业务含义',
+        confirm: '建立映射',
+      },
       messages: {
         saved: '语义映射已保存',
         deleted: '语义映射已删除',
@@ -853,6 +930,7 @@ const messages = {
         status: '状态',
         type: '类型',
         processor: '处理方',
+        queue: '工单范围',
         openOnly: '只看待办',
       },
       tables: {

@@ -1,36 +1,13 @@
 <template>
   <div class="admin-container">
-    <div class="header-card">
-      <div>
-        <h1 class="header-title">{{ t('dashboard.title') }}</h1>
-        <p class="header-subtitle">{{ t('dashboard.subtitle') }}</p>
-      </div>
-      <div class="header-actions">
-        <el-button-group class="nav-group">
-          <el-button :type="isProjectsRoute ? 'primary' : 'default'" @click="goProjects">
-            <el-icon class="el-icon--left"><FolderOpened /></el-icon>
-            {{ t('nav.projects') }}
-          </el-button>
-          <el-button :type="isMetricsRoute ? 'primary' : 'default'" @click="goMetrics">
-            <el-icon class="el-icon--left"><TrendCharts /></el-icon>
-            {{ t('nav.metrics') }}
-          </el-button>
-          <el-button :type="isSemanticRoute ? 'primary' : 'default'" @click="goSemantics">
-            <el-icon class="el-icon--left"><CollectionTag /></el-icon>
-            {{ t('nav.semantics') }}
-          </el-button>
-          <el-button :type="isPrivacyRoute ? 'primary' : 'default'" @click="goPrivacyRequests">
-            <el-icon class="el-icon--left"><Tickets /></el-icon>
-            {{ t('nav.privacyRequests') }}
-          </el-button>
-        </el-button-group>
-        <LanguageToggle />
+    <PageHeader :title="t('dashboard.title')" :subtitle="t('dashboard.subtitle')">
+      <template #actions>
         <el-button type="primary" size="large" @click="showAddDialog" class="add-btn">
           <el-icon class="el-icon--left"><Plus /></el-icon>
           {{ t('buttons.addProject') }}
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <div class="content-card">
       <div v-if="loading" class="loading-state">
@@ -46,8 +23,9 @@
         <div
           v-for="project in projects"
           :key="project.id"
-          class="project-card clickable"
-          role="button"
+          class="project-card"
+          :class="{ clickable: project.isActive, disabled: !project.isActive }"
+          :role="project.isActive ? 'button' : undefined"
           @click="openProjectMetrics(project)"
         >
           <div class="project-header">
@@ -73,17 +51,17 @@
               <el-icon v-else><Close /></el-icon>
               {{ t('status.connection') }}
             </span>
-            <span class="health-badge" :class="project.health.tables.devices ? 'success' : 'warning'">
-              {{ project.health.tables.devices ? '✓' : '✗' }} {{ t('status.devices') }}
+            <span class="health-badge" :class="project.health.tables?.devices ? 'success' : 'warning'">
+              {{ project.health.tables?.devices ? '✓' : '✗' }} {{ t('status.devices') }}
             </span>
-            <span class="health-badge" :class="project.health.tables.events ? 'success' : 'warning'">
-              {{ project.health.tables.events ? '✓' : '✗' }} {{ t('status.events') }}
+            <span class="health-badge" :class="project.health.tables?.events ? 'success' : 'warning'">
+              {{ project.health.tables?.events ? '✓' : '✗' }} {{ t('status.events') }}
             </span>
-            <span class="health-badge" :class="project.health.tables.sessions ? 'success' : 'warning'">
-              {{ project.health.tables.sessions ? '✓' : '✗' }} {{ t('status.sessions') }}
+            <span class="health-badge" :class="project.health.tables?.sessions ? 'success' : 'warning'">
+              {{ project.health.tables?.sessions ? '✓' : '✗' }} {{ t('status.sessions') }}
             </span>
-            <span class="health-badge" :class="project.health.tables.traffic_metrics ? 'success' : 'warning'">
-              {{ project.health.tables.traffic_metrics ? '✓' : '✗' }} {{ t('status.traffic') }}
+            <span class="health-badge" :class="project.health.tables?.traffic_metrics ? 'success' : 'warning'">
+              {{ project.health.tables?.traffic_metrics ? '✓' : '✗' }} {{ t('status.traffic') }}
             </span>
             <span
               v-if="project.health.connected"
@@ -116,8 +94,8 @@
             </el-button>
           </div>
           <div class="card-footer">
-            {{ t('dashboard.viewMetrics') }}
-            <el-icon class="card-footer-icon"><ArrowRight /></el-icon>
+            {{ project.isActive ? t('dashboard.viewMetrics') : t('dashboard.inactiveHint') }}
+            <el-icon v-if="project.isActive" class="card-footer-icon"><ArrowRight /></el-icon>
           </div>
         </div>
       </div>
@@ -211,14 +189,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import LanguageToggle from '@/components/LanguageToggle.vue'
+import PageHeader from '@/components/PageHeader.vue'
 import { useI18n } from '@/i18n'
+import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
 import { 
-  getProjects, 
   createProject, 
   updateProject, 
   deleteProject, 
@@ -233,20 +211,11 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 
 const router = useRouter()
-const route = useRoute()
-
-const isProjectsRoute = computed(() => route.path === '/')
-const isMetricsRoute = computed(() => route.path === '/metrics')
-const isSemanticRoute = computed(() => route.path === '/semantics')
-const isPrivacyRoute = computed(() => route.path === '/privacy-requests')
-
-const goProjects = () => router.push('/')
-const goMetrics = () => router.push('/metrics')
-const goSemantics = () => router.push('/semantics')
-const goPrivacyRequests = () => router.push('/privacy-requests')
+const projectContext = useProjectContextStore()
 const { t } = useI18n()
 
 const openProjectMetrics = (project: Project) => {
+  if (!project.isActive) return
   router.push({ path: '/metrics', query: { projectId: project.projectId } })
 }
 
@@ -268,8 +237,12 @@ const form = ref(getEmptyForm())
 const loadProjects = async () => {
   loading.value = true
   try {
-    const res = await getProjects()
-    projects.value = res.data.data.map((p) => ({ ...p, health: null, healthLoading: false }))
+    await projectContext.ensureLoaded()
+    projects.value = projectContext.projects.map((project) => ({
+      ...project,
+      health: null,
+      healthLoading: false,
+    }))
     // Trigger health checks after list load to avoid blocking initial render.
     projects.value.forEach(p => handleCheckHealth(p))
   } catch (error) {
@@ -317,6 +290,7 @@ const handleEditProject = (project: Project) => {
 }
 
 const saveProject = async () => {
+  let preferredProjectId = projectContext.selectedProjectId
   try {
     if (isEdit.value) {
       if (form.value.id) {
@@ -325,12 +299,19 @@ const saveProject = async () => {
       }
     } else {
       await createProject(form.value)
+      preferredProjectId = form.value.projectId || preferredProjectId
       ElMessage.success(t('messages.projectCreated'))
     }
     dialogVisible.value = false
-    loadProjects()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.saveProjectFailed')))
+    return
+  }
+  try {
+    await projectContext.reload(preferredProjectId)
+    await loadProjects()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   }
 }
 
@@ -362,11 +343,17 @@ const handleDeleteProject = async (project: Project) => {
     
     await deleteProject(project.id)
     ElMessage.success(t('messages.projectDeleted'))
-    loadProjects()
   } catch (error) {
     if (error !== 'cancel') {
         ElMessage.error(getErrorMessage(error, t('messages.deletionFailed')))
     }
+    return
+  }
+  try {
+    await projectContext.reload(projectContext.selectedProjectId)
+    await loadProjects()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   }
 }
 
@@ -379,42 +366,7 @@ onMounted(() => {
 .admin-container {
   max-width: 1400px;
   margin: 0 auto;
-  padding: 40px 20px;
   color: #1d1d1f;
-}
-
-.header-card {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 18px;
-  padding: 32px;
-  margin-bottom: 32px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border: 1px solid rgba(0, 0, 0, 0.04);
-  gap: 24px;
-}
-
-.header-title {
-  font-size: 34px;
-  font-weight: 700;
-  color: #1d1d1f;
-  letter-spacing: -0.02em;
-}
-
-.header-subtitle {
-  color: #86868b;
-  font-size: 14px;
-  margin: 6px 0 0;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
 }
 
 .content-card {
@@ -452,6 +404,7 @@ onMounted(() => {
 .project-card.clickable {
   cursor: pointer;
 }
+.project-card.disabled { opacity: 0.72; }
 
 .project-card:hover {
   transform: translateY(-4px);
