@@ -443,6 +443,7 @@ const messages = {
         email: 'Email',
         requestedAt: 'Requested At',
         operator: 'Operator',
+        nextStep: 'Next step',
       },
       fields: {
         source: 'Source',
@@ -459,6 +460,9 @@ const messages = {
       actions: {
         detail: 'Detail',
         process: 'Process',
+        startProcessing: 'Start processing',
+        completeProcessing: 'Complete',
+        otherActions: 'Other actions',
         export: 'Generate export',
         anonymize: 'Anonymize data',
         confirmExport: 'Generate and download',
@@ -466,6 +470,15 @@ const messages = {
         notify: 'Notify',
         notifyUser: 'Notify user',
         send: 'Send',
+      },
+      workflow: {
+        startTitle: 'Move this ticket into active processing',
+        startDescription: 'Assign an operator first. The data action becomes available after the ticket enters In Progress.',
+        nextStart: 'Start processing and assign an operator',
+        nextAnonymize: 'Anonymize matching analytics data',
+        nextExport: 'Generate the customer data export',
+        nextComplete: 'Record the external processing result',
+        finished: 'No further data action required',
       },
       execution: {
         exportTitle: 'Generate user data export',
@@ -948,6 +961,7 @@ const messages = {
         email: '联系邮箱',
         requestedAt: '提交时间',
         operator: '处理人',
+        nextStep: '下一步',
       },
       fields: {
         source: '来源',
@@ -964,6 +978,9 @@ const messages = {
       actions: {
         detail: '详情',
         process: '处理',
+        startProcessing: '开始处理',
+        completeProcessing: '完成处理',
+        otherActions: '其他操作',
         export: '生成导出',
         anonymize: '匿名化数据',
         confirmExport: '生成并下载',
@@ -971,6 +988,15 @@ const messages = {
         notify: '通知',
         notifyUser: '通知用户',
         send: '发送',
+      },
+      workflow: {
+        startTitle: '先把工单推进到“处理中”',
+        startDescription: '填写处理人并开始处理；进入“处理中”后，列表会明确显示“匿名化数据”或“生成导出”按钮。',
+        nextStart: '开始处理并指定处理人',
+        nextAnonymize: '匿名化匹配到的分析数据',
+        nextExport: '生成用户数据导出文件',
+        nextComplete: '登记外部处理结果',
+        finished: '数据处理流程已结束',
       },
       execution: {
         exportTitle: '生成用户数据导出',

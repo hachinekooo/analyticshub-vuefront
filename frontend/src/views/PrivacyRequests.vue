@@ -79,40 +79,59 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column :label="t('privacy.tables.nextStep')" min-width="190">
+          <template #default="{ row }">
+            <span class="next-step">{{ nextStepLabel(row) }}</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="contactEmail" :label="t('privacy.tables.email')" min-width="180" show-overflow-tooltip />
         <el-table-column prop="userId" :label="t('tables.userId')" min-width="150" show-overflow-tooltip />
         <el-table-column prop="requestedAt" :label="t('privacy.tables.requestedAt')" min-width="170">
           <template #default="{ row }">{{ formatDateTime(row.requestedAt) }}</template>
         </el-table-column>
         <el-table-column prop="operator" :label="t('privacy.tables.operator')" min-width="120" show-overflow-tooltip />
-        <el-table-column :label="t('buttons.actions')" fixed="right" min-width="280">
+        <el-table-column :label="t('buttons.actions')" fixed="right" min-width="340">
           <template #default="{ row }">
-            <el-button size="small" link type="primary" @click="openDetail(row)">
-              {{ t('privacy.actions.detail') }}
-            </el-button>
-            <el-button
-              v-if="isExecutable(row)"
-              size="small"
-              link
-              :type="row.requestType === 'DELETE' ? 'danger' : 'success'"
-              @click="openExecution(row)"
-            >
-              {{ row.requestType === 'DELETE'
-                ? t('privacy.actions.anonymize')
-                : t('privacy.actions.export') }}
-            </el-button>
-            <el-button
-              size="small"
-              link
-              type="success"
-              :disabled="isFinalStatus(row.status)"
-              @click="openUpdate(row)"
-            >
-              {{ t('privacy.actions.process') }}
-            </el-button>
-            <el-button size="small" link type="warning" @click="openNotify(row)">
-              {{ t('privacy.actions.notify') }}
-            </el-button>
+            <div class="row-actions">
+              <el-button size="small" @click="openDetail(row)">{{ t('privacy.actions.detail') }}</el-button>
+              <el-button
+                v-if="row.status === 'SUBMITTED'"
+                size="small"
+                type="primary"
+                @click="openStartProcessing(row)"
+              >
+                {{ t('privacy.actions.startProcessing') }}
+              </el-button>
+              <el-button
+                v-else-if="isExecutable(row)"
+                size="small"
+                :type="row.requestType === 'DELETE' ? 'danger' : 'primary'"
+                @click="openExecution(row)"
+              >
+                {{ row.requestType === 'DELETE'
+                  ? t('privacy.actions.anonymize')
+                  : t('privacy.actions.export') }}
+              </el-button>
+              <el-button
+                v-else-if="row.status === 'IN_PROGRESS'"
+                size="small"
+                type="primary"
+                @click="openUpdate(row)"
+              >
+                {{ t('privacy.actions.completeProcessing') }}
+              </el-button>
+              <el-button
+                v-if="!isFinalStatus(row.status)"
+                size="small"
+                text
+                @click="openUpdate(row)"
+              >
+                {{ t('privacy.actions.otherActions') }}
+              </el-button>
+              <el-button v-if="isFinalStatus(row.status)" size="small" text @click="openNotify(row)">
+                {{ t('privacy.actions.notify') }}
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -175,9 +194,18 @@
       </div>
     </el-drawer>
 
-    <el-dialog v-model="updateVisible" :title="t('privacy.processTitle')" width="560px">
+    <el-dialog v-model="updateVisible" :title="updateDialogTitle" width="560px">
       <el-form :model="updateForm" label-position="top">
-        <el-form-item :label="t('privacy.filters.status')">
+        <el-alert
+          v-if="updateMode === 'start'"
+          :title="t('privacy.workflow.startTitle')"
+          :description="t('privacy.workflow.startDescription')"
+          type="info"
+          show-icon
+          :closable="false"
+          class="execution-alert"
+        />
+        <el-form-item v-else :label="t('privacy.filters.status')">
           <el-select v-model="updateForm.status" style="width: 100%">
             <el-option v-for="status in allowedTargetStatuses" :key="status" :label="statusLabel(status)" :value="status" />
           </el-select>
@@ -188,7 +216,7 @@
         <el-form-item :label="t('privacy.fields.operatorNote')">
           <el-input v-model="updateForm.operatorNote" type="textarea" :rows="3" maxlength="4000" show-word-limit />
         </el-form-item>
-        <el-form-item :label="t('privacy.fields.resultPayload')">
+        <el-form-item v-if="updateMode !== 'start'" :label="t('privacy.fields.resultPayload')">
           <el-input v-model="resultPayloadText" type="textarea" :rows="5" :placeholder="t('privacy.placeholders.resultPayload')" />
         </el-form-item>
         <el-form-item>
@@ -200,7 +228,9 @@
       </el-form>
       <template #footer>
         <el-button @click="updateVisible = false">{{ t('buttons.cancel') }}</el-button>
-        <el-button type="primary" :loading="updating" @click="submitUpdate">{{ t('buttons.save') }}</el-button>
+        <el-button type="primary" :loading="updating" @click="submitUpdate">
+          {{ updateMode === 'start' ? t('privacy.actions.startProcessing') : t('buttons.save') }}
+        </el-button>
       </template>
     </el-dialog>
 
@@ -280,6 +310,7 @@ import PageHeader from '@/components/PageHeader.vue'
 import { useI18n } from '@/i18n'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import { isFinalPrivacyStatus, privacyPrimaryAction } from '@/utils/privacyWorkflow'
 import {
   getPrivacyRequestDetail,
   getPrivacyRequestActivities,
@@ -315,6 +346,7 @@ const detailLoading = ref(false)
 const updateVisible = ref(false)
 const notifyVisible = ref(false)
 const executionVisible = ref(false)
+const updateMode = ref<'start' | 'manage'>('manage')
 const resultPayloadText = ref('')
 let requestGeneration = 0
 
@@ -359,11 +391,11 @@ const executionForm = reactive({
   confirmation: '',
 })
 
-const isFinalStatus = (status: PrivacyRequestStatus) =>
-  status === 'COMPLETED' || status === 'REJECTED' || status === 'CANCELLED'
+const isFinalStatus = isFinalPrivacyStatus
 
 const isExecutable = (request: PrivacyRequestItem) =>
-  request.processor === 'ANALYTICSHUB' && !isFinalStatus(request.status)
+  privacyPrimaryAction(request) === 'ANONYMIZE'
+  || privacyPrimaryAction(request) === 'EXPORT'
 
 const allowedTargetStatuses = computed<PrivacyRequestStatus[]>(() => {
   const current = selectedRequest.value?.status
@@ -392,6 +424,10 @@ const executionAlertTitle = computed(() => selectedRequest.value?.requestType ==
 const executionAlertDescription = computed(() => selectedRequest.value?.requestType === 'DELETE'
   ? t('privacy.execution.anonymizeDescription')
   : t('privacy.execution.exportDescription'))
+
+const updateDialogTitle = computed(() => updateMode.value === 'start'
+  ? t('privacy.actions.startProcessing')
+  : t('privacy.processTitle'))
 
 const cleanParams = <T extends Record<string, unknown>>(params: T): T => {
   return Object.fromEntries(
@@ -505,9 +541,24 @@ const openDetail = async (row: PrivacyRequestItem) => {
 
 const openUpdate = async (row: PrivacyRequestItem) => {
   if (isFinalStatus(row.status)) return
+  updateMode.value = 'manage'
   selectedRequest.value = row
   selectedProjectId.value = requests.projectId || filters.projectId
   updateForm.status = row.status === 'SUBMITTED' ? 'IN_PROGRESS' : row.status
+  updateForm.operator = row.operator || ''
+  updateForm.operatorNote = ''
+  updateForm.notifyUser = false
+  updateForm.notificationMessage = ''
+  resultPayloadText.value = ''
+  updateVisible.value = true
+}
+
+const openStartProcessing = (row: PrivacyRequestItem) => {
+  if (row.status !== 'SUBMITTED') return
+  updateMode.value = 'start'
+  selectedRequest.value = row
+  selectedProjectId.value = requests.projectId || filters.projectId
+  updateForm.status = 'IN_PROGRESS'
   updateForm.operator = row.operator || ''
   updateForm.operatorNote = ''
   updateForm.notifyUser = false
@@ -602,6 +653,10 @@ const submitUpdate = async () => {
   const projectId = selectedProjectId.value
   const requestId = selectedRequest.value.requestId
   if (!projectId) return
+  if (updateMode.value === 'start' && !updateForm.operator.trim()) {
+    ElMessage.warning(t('privacy.errors.operatorRequired'))
+    return
+  }
   updating.value = true
   try {
     const resultPayload = parseResultPayload()
@@ -677,6 +732,15 @@ const statusTagType = (status: PrivacyRequestStatus) => {
 
 const statusLabel = (status: PrivacyRequestStatus) => t(`privacy.status.${status}`)
 
+const nextStepLabel = (request: PrivacyRequestItem) => {
+  const action = privacyPrimaryAction(request)
+  if (action === 'START') return t('privacy.workflow.nextStart')
+  if (action === 'ANONYMIZE') return t('privacy.workflow.nextAnonymize')
+  if (action === 'EXPORT') return t('privacy.workflow.nextExport')
+  if (action === 'COMPLETE') return t('privacy.workflow.nextComplete')
+  return t('privacy.workflow.finished')
+}
+
 const activityLabel = (activityType: string) => {
   const key = `privacy.activities.${activityType}`
   const label = t(key)
@@ -744,6 +808,22 @@ onMounted(async () => {
 
 .request-table {
   width: 100%;
+}
+
+.next-step {
+  color: #6e6e73;
+  font-size: 13px;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.row-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .table-footer {
