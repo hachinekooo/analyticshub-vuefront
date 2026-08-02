@@ -1,46 +1,46 @@
 export type CounterConditions = Record<string, unknown>
 
 export type CounterEventTriggerClause = {
-  event_type: string
+  semantic_key: string
   conditions?: CounterConditions
 }
 
-type LegacySingleEventTrigger = {
-  event_type: string
-  event_types?: never
+type SingleSemanticTrigger = {
+  semantic_key: string
+  semantic_keys?: never
   conditions?: CounterConditions
   any_of?: never
 }
 
-type LegacyMultipleEventTrigger = {
-  event_type?: never
-  event_types: string[]
+type MultipleSemanticTrigger = {
+  semantic_key?: never
+  semantic_keys: string[]
   conditions?: CounterConditions
   any_of?: never
 }
 
 type AnyOfEventTrigger = {
-  event_type?: never
-  event_types?: never
+  semantic_key?: never
+  semantic_keys?: never
   conditions?: never
   any_of: CounterEventTriggerClause[]
 }
 
 export type CounterEventTrigger =
-  | LegacySingleEventTrigger
-  | LegacyMultipleEventTrigger
+  | SingleSemanticTrigger
+  | MultipleSemanticTrigger
   | AnyOfEventTrigger
 
 export type CounterTriggerMode = 'shared' | 'anyOf'
 
 export type CounterEventTriggerClauseDraft = {
-  eventType: string
+  semanticKey: string
   conditionsText: string
 }
 
 export type CounterEventTriggerDraft = {
   mode: CounterTriggerMode
-  eventTypes: string[]
+  semanticKeys: string[]
   conditionsText: string
   clauses: CounterEventTriggerClauseDraft[]
 }
@@ -78,24 +78,24 @@ export const createCounterEventTriggerDraft = (
   if (trigger && 'any_of' in trigger && Array.isArray(trigger.any_of)) {
     return {
       mode: 'anyOf',
-      eventTypes: [],
+      semanticKeys: [],
       conditionsText: '',
       clauses: trigger.any_of.map((clause) => ({
-        eventType: clause.event_type,
+        semanticKey: clause.semantic_key,
         conditionsText: conditionsText(clause.conditions),
       })),
     }
   }
 
-  const eventTypes = trigger && 'event_types' in trigger && Array.isArray(trigger.event_types)
-    ? [...trigger.event_types]
-    : trigger && 'event_type' in trigger && typeof trigger.event_type === 'string'
-      ? [trigger.event_type]
+  const semanticKeys = trigger && 'semantic_keys' in trigger && Array.isArray(trigger.semantic_keys)
+    ? [...trigger.semantic_keys]
+    : trigger && 'semantic_key' in trigger && typeof trigger.semantic_key === 'string'
+      ? [trigger.semantic_key]
       : []
 
   return {
     mode: 'shared',
-    eventTypes,
+    semanticKeys,
     conditionsText: conditionsText(trigger?.conditions),
     clauses: [],
   }
@@ -133,17 +133,17 @@ export const buildCounterEventTrigger = (
   draft: CounterEventTriggerDraft,
 ): CounterTriggerBuildResult => {
   if (draft.mode === 'shared') {
-    const eventTypes = [...new Set(draft.eventTypes.map((item) => item.trim()).filter(Boolean))]
-    if (eventTypes.length > maxClauses) return { error: 'tooManyEventTypes' }
+    const semanticKeys = [...new Set(draft.semanticKeys.map((item) => item.trim()).filter(Boolean))]
+    if (semanticKeys.length > maxClauses) return { error: 'tooManyEventTypes' }
 
     const conditions = parseConditions(draft.conditionsText)
     if (conditions === 'invalid') return { error: 'invalidConditions' }
-    if (conditions && eventTypes.length === 0) return { error: 'eventTypeRequired' }
-    if (eventTypes.length === 0) return {}
+    if (conditions && semanticKeys.length === 0) return { error: 'eventTypeRequired' }
+    if (semanticKeys.length === 0) return {}
 
-    const eventSelector = eventTypes.length === 1
-      ? { event_type: eventTypes[0]! }
-      : { event_types: eventTypes }
+    const eventSelector = semanticKeys.length === 1
+      ? { semantic_key: semanticKeys[0]! }
+      : { semantic_keys: semanticKeys }
     return {
       trigger: {
         ...eventSelector,
@@ -158,9 +158,9 @@ export const buildCounterEventTrigger = (
   const clauses: CounterEventTriggerClause[] = []
   const seenClauses = new Set<string>()
   for (const [clauseIndex, clause] of draft.clauses.entries()) {
-    const eventType = clause.eventType.trim()
+    const semanticKey = clause.semanticKey.trim()
     const hasConditionsText = Boolean(clause.conditionsText.trim())
-    if (!eventType) {
+    if (!semanticKey) {
       if (draft.clauses.length === 1 && !hasConditionsText) return {}
       return { error: 'clauseEventTypeRequired', clauseIndex }
     }
@@ -168,7 +168,7 @@ export const buildCounterEventTrigger = (
     const conditions = parseConditions(clause.conditionsText)
     if (conditions === 'invalid') return { error: 'invalidClauseConditions', clauseIndex }
     const normalizedClause: CounterEventTriggerClause = {
-      event_type: eventType,
+      semantic_key: semanticKey,
       ...(conditions ? { conditions } : {}),
     }
     const signature = canonicalJson(normalizedClause)

@@ -112,16 +112,19 @@
         <template v-if="triggerDraft.mode === 'shared'">
           <el-form-item :label="t('metrics.counterFields.eventType')">
             <el-select
-              v-model="triggerDraft.eventTypes"
+              v-model="triggerDraft.semanticKeys"
               multiple
               filterable
-              allow-create
-              default-first-option
               clearable
               style="width: 100%"
               :placeholder="t('metrics.counterFields.eventTypePlaceholder')"
             >
-              <el-option v-for="eventType in eventTypes" :key="eventType" :label="eventType" :value="eventType" />
+              <el-option
+                v-for="definition in semanticDefinitions"
+                :key="definition.semanticKey"
+                :label="semanticOptionLabel(definition)"
+                :value="definition.semanticKey"
+              />
             </el-select>
           </el-form-item>
           <el-form-item :label="t('metrics.counterFields.conditions')">
@@ -148,14 +151,17 @@
               </div>
               <el-form-item :label="t('metrics.counterFields.clauseEventType')" required>
                 <el-select
-                  v-model="clause.eventType"
+                  v-model="clause.semanticKey"
                   filterable
-                  allow-create
-                  default-first-option
                   style="width: 100%"
                   :placeholder="t('metrics.counterFields.clauseEventTypePlaceholder')"
                 >
-                  <el-option v-for="eventType in eventTypes" :key="eventType" :label="eventType" :value="eventType" />
+                  <el-option
+                    v-for="definition in semanticDefinitions"
+                    :key="definition.semanticKey"
+                    :label="semanticOptionLabel(definition)"
+                    :value="definition.semanticKey"
+                  />
                 </el-select>
               </el-form-item>
               <el-form-item :label="t('metrics.counterFields.clauseConditions')">
@@ -201,7 +207,6 @@ import {
 } from './eventTrigger'
 import {
   deleteCounter,
-  getCounterEventTypes,
   getCounters,
   incrementCounter,
   rebuildCounter,
@@ -210,6 +215,7 @@ import {
   type CounterItem,
   type CounterUpsertPayload,
 } from '@/api/metrics'
+import { getSemanticDefinitions, type SemanticDefinition } from '@/api/semantic'
 
 const props = defineProps<{
   projectId: string
@@ -220,7 +226,7 @@ const props = defineProps<{
 
 const { locale, t } = useI18n()
 const counters = ref<CounterItem[]>([])
-const eventTypes = ref<string[]>([])
+const semanticDefinitions = ref<SemanticDefinition[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const editingKey = ref('')
@@ -260,6 +266,11 @@ const localizedText = (value: Record<string, string> | string | null) => {
   return Object.values(value)[0] || ''
 }
 
+const semanticOptionLabel = (definition: SemanticDefinition) => {
+  const name = localizedText(definition.displayName)
+  return name ? `${name} · ${definition.semanticKey}` : definition.semanticKey
+}
+
 const formatTimestamp = (value: number) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
@@ -284,15 +295,16 @@ const load = async () => {
   }
 }
 
-const loadEventTypes = async () => {
+const loadSemanticDefinitions = async () => {
   const projectId = props.projectId
   if (!projectId) return
   try {
-    const response = await getCounterEventTypes({ projectId })
-    if (props.projectId === projectId) eventTypes.value = response.data.data
+    const response = await getSemanticDefinitions(projectId)
+    if (props.projectId === projectId) {
+      semanticDefinitions.value = response.data.data.items.filter((item) => item.isActive)
+    }
   } catch {
-    // 元数据加载失败时仍允许手动输入事件 key。
-    if (props.projectId === projectId) eventTypes.value = []
+    if (props.projectId === projectId) semanticDefinitions.value = []
   }
 }
 
@@ -325,18 +337,18 @@ const resetForm = (counter?: CounterItem) => {
 const showCreateDialog = () => {
   resetForm()
   dialogVisible.value = true
-  void loadEventTypes()
+  void loadSemanticDefinitions()
 }
 
 const showEditDialog = (counter: CounterItem) => {
   resetForm(counter)
   dialogVisible.value = true
-  void loadEventTypes()
+  void loadSemanticDefinitions()
 }
 
 const addClause = () => {
   if (triggerDraft.clauses.length < 100) {
-    triggerDraft.clauses.push({ eventType: '', conditionsText: '' })
+    triggerDraft.clauses.push({ semanticKey: '', conditionsText: '' })
   }
 }
 

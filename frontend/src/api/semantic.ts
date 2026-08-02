@@ -8,6 +8,7 @@ export type SemanticDefinition = {
   projectId: string
   sourceKind: SemanticSourceKind
   semanticKey: string
+  origin: 'OFFICIAL' | 'CUSTOM'
   displayName: Record<string, string>
   category: string | null
   description: string | null

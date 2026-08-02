@@ -91,6 +91,9 @@
             <template #default="{ row }">
               <div class="primary-cell">{{ localizedName(row.displayName) }}</div>
               <code>{{ row.semanticKey }}</code>
+              <el-tag size="small" effect="plain" :type="row.origin === 'OFFICIAL' ? 'primary' : 'info'">
+                {{ row.origin === 'OFFICIAL' ? t('semantics.origin.official') : t('semantics.origin.custom') }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="category" :label="t('semantics.fields.category')" min-width="110">
@@ -120,7 +123,13 @@
               <el-button size="small" link type="primary" @click="openEditDialog(row)">
                 {{ t('buttons.edit') }}
               </el-button>
-              <el-button size="small" link type="danger" @click="removeDefinition(row)">
+              <el-button
+                v-if="row.origin === 'CUSTOM'"
+                size="small"
+                link
+                type="danger"
+                @click="removeDefinition(row)"
+              >
                 {{ t('buttons.delete') }}
               </el-button>
             </template>
@@ -338,6 +347,7 @@ const resetForm = () => {
 
 const openCreateDialog = () => {
   resetForm()
+  form.semanticKey = 'custom.'
   dialogVisible.value = true
 }
 
@@ -357,7 +367,7 @@ const openEditDialog = (definition: SemanticDefinition) => {
 
 const suggestedSemanticKey = (rawKey: string) => {
   const normalized = rawKey.toLowerCase().replace(/[^a-z0-9._-]+/g, '_').replace(/^[_-]+/, '')
-  return normalized.slice(0, 100) || 'event'
+  return `custom.${normalized || 'event'}`.slice(0, 100)
 }
 
 const openFromRaw = (rawKey: string) => {
@@ -426,6 +436,10 @@ const saveDefinition = async () => {
   if (form.enName.trim()) displayName.en = form.enName.trim()
   if (!semanticKey || Object.keys(displayName).length === 0) {
     ElMessage.warning(t('semantics.errors.required'))
+    return
+  }
+  if (!editingKey.value && !/^custom\.[a-z0-9][a-z0-9._-]*$/.test(semanticKey)) {
+    ElMessage.warning(t('semantics.errors.customNamespace'))
     return
   }
 

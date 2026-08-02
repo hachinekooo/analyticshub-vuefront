@@ -27,7 +27,10 @@ export interface DashboardSpaceDefinition {
 const appLayout: readonly DashboardLayoutItem[] = [
   { x: 0, y: 0, w: 12, h: 4, i: 'overview_default', type: 'core.overview', minW: 6, minH: 3 },
   { x: 0, y: 4, w: 8, h: 10, i: 'trends_default', type: 'core.trends', minW: 4, minH: 6 },
-  { x: 8, y: 4, w: 4, h: 10, i: 'topEvents_default', type: 'core.topEvents', minW: 3, minH: 6 },
+  {
+    x: 8, y: 4, w: 4, h: 10, i: 'topEvents_default', type: 'core.topEvents', minW: 3, minH: 6,
+    config: { aggregation: 'semantic' },
+  },
 ]
 
 const websiteLayout: readonly DashboardLayoutItem[] = [

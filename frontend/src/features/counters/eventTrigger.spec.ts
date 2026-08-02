@@ -11,9 +11,9 @@ describe('counter event trigger editor model', () => {
   it('round-trips any_of clauses without collapsing same-event conditions', () => {
     const original: CounterEventTrigger = {
       any_of: [
-        { event_type: 'item_completed' },
-        { event_type: 'item_done_v2', conditions: { source: 'api' } },
-        { event_type: 'item_done_v2', conditions: { source: 'import' } },
+        { semantic_key: 'core.action.completed' },
+        { semantic_key: 'custom.content.shared', conditions: { source: 'api' } },
+        { semantic_key: 'custom.content.shared', conditions: { source: 'import' } },
       ],
     }
 
@@ -27,9 +27,9 @@ describe('counter event trigger editor model', () => {
     expect(areCounterEventTriggersEqual(result.trigger, original)).toBe(true)
   })
 
-  it('keeps legacy event_types with shared conditions editable', () => {
+  it('keeps semantic_keys with shared conditions editable', () => {
     const original: CounterEventTrigger = {
-      event_types: ['item_saved', 'item_completed'],
+      semantic_keys: ['core.action.completed', 'custom.content.shared'],
       conditions: { status: 'success' },
     }
 
@@ -38,19 +38,19 @@ describe('counter event trigger editor model', () => {
     expect(result).toEqual({ trigger: original })
   })
 
-  it('normalizes whitespace and duplicate legacy event keys', () => {
+  it('normalizes whitespace and duplicate semantic keys', () => {
     const draft = createCounterEventTriggerDraft(null)
-    draft.eventTypes = [' item_saved ', 'item_saved', 'item_completed']
+    draft.semanticKeys = [' core.action.completed ', 'core.action.completed', 'custom.content.shared']
 
     expect(buildCounterEventTrigger(draft)).toEqual({
-      trigger: { event_types: ['item_saved', 'item_completed'] },
+      trigger: { semantic_keys: ['core.action.completed', 'custom.content.shared'] },
     })
   })
 
   it('rejects a partially configured any_of clause instead of silently clearing it', () => {
     const draft = createCounterEventTriggerDraft(null)
     draft.mode = 'anyOf'
-    draft.clauses = [{ eventType: '', conditionsText: '{"source":"api"}' }]
+    draft.clauses = [{ semanticKey: '', conditionsText: '{"source":"api"}' }]
 
     expect(buildCounterEventTrigger(draft)).toEqual({
       error: 'clauseEventTypeRequired',
@@ -61,7 +61,7 @@ describe('counter event trigger editor model', () => {
   it('rejects invalid clause conditions and exact duplicate clauses', () => {
     const invalid = createCounterEventTriggerDraft(null)
     invalid.mode = 'anyOf'
-    invalid.clauses = [{ eventType: 'item_saved', conditionsText: '[]' }]
+    invalid.clauses = [{ semanticKey: 'core.action.completed', conditionsText: '[]' }]
     expect(buildCounterEventTrigger(invalid)).toEqual({
       error: 'invalidClauseConditions',
       clauseIndex: 0,
@@ -70,8 +70,8 @@ describe('counter event trigger editor model', () => {
     const duplicate = createCounterEventTriggerDraft(null)
     duplicate.mode = 'anyOf'
     duplicate.clauses = [
-      { eventType: 'item_saved', conditionsText: '{"source":"api","status":"ok"}' },
-      { eventType: ' item_saved ', conditionsText: '{"status":"ok","source":"api"}' },
+      { semanticKey: 'core.action.completed', conditionsText: '{"source":"api","status":"ok"}' },
+      { semanticKey: ' core.action.completed ', conditionsText: '{"status":"ok","source":"api"}' },
     ]
     expect(buildCounterEventTrigger(duplicate)).toEqual({
       error: 'duplicateClause',
@@ -81,16 +81,16 @@ describe('counter event trigger editor model', () => {
 
   it('compares equivalent JSON regardless of object property order', () => {
     expect(areCounterEventTriggersEqual(
-      { event_type: 'item_saved', conditions: { source: 'api', status: 'ok' } },
-      { conditions: { status: 'ok', source: 'api' }, event_type: 'item_saved' },
+      { semantic_key: 'item_saved', conditions: { source: 'api', status: 'ok' } },
+      { conditions: { status: 'ok', source: 'api' }, semantic_key: 'item_saved' },
     )).toBe(true)
   })
 
   it('emits no trigger patch when an any_of rule is opened and saved unchanged', () => {
     const original: CounterEventTrigger = {
       any_of: [
-        { event_type: 'item_saved', conditions: { source: 'api' } },
-        { event_type: 'item_saved', conditions: { source: 'import' } },
+        { semantic_key: 'item_saved', conditions: { source: 'api' } },
+        { semantic_key: 'item_saved', conditions: { source: 'import' } },
       ],
     }
 
@@ -102,7 +102,7 @@ describe('counter event trigger editor model', () => {
 
   it('uses explicit clear semantics only after all clauses are removed', () => {
     const original: CounterEventTrigger = {
-      any_of: [{ event_type: 'item_saved' }],
+      any_of: [{ semantic_key: 'item_saved' }],
     }
     const draft = createCounterEventTriggerDraft(original)
     draft.clauses = []

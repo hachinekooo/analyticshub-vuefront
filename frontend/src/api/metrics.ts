@@ -350,10 +350,6 @@ export const deleteCounter = (key: string, params: { projectId: string }) => {
   )
 }
 
-export const getCounterEventTypes = (params: { projectId: string }) => {
-  return request.get<ApiResponse<string[]>>('/admin/counters/metadata/event-types', { params })
-}
-
 export const incrementCounter = (key: string, params: { projectId: string }) => {
   return request.post<ApiResponse<CounterItem>>(
     `/admin/counters/${encodeURIComponent(key)}/increment`,

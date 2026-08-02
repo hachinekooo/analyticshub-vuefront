@@ -360,16 +360,14 @@
               v-model="widgetConfigForm.funnelSteps"
               multiple
               filterable
-              allow-create
-              default-first-option
               style="width: 100%"
               :placeholder="t('metrics.widgetConfig.funnelStepsPlaceholder')"
             >
               <el-option
-                v-for="eventType in dashboardEventTypeOptions"
-                :key="eventType"
-                :label="eventOptionLabel(eventType)"
-                :value="eventType"
+                v-for="definition in activeSemanticDefinitions"
+                :key="definition.semanticKey"
+                :label="semanticDefinitionLabel(definition)"
+                :value="definition.semanticKey"
               />
             </el-select>
           </el-form-item>
@@ -388,16 +386,14 @@
             <el-select
               v-model="widgetConfigForm.cohortEvent"
               filterable
-              allow-create
-              default-first-option
               style="width: 100%"
               :placeholder="t('metrics.widgetConfig.eventPlaceholder')"
             >
               <el-option
-                v-for="eventType in dashboardEventTypeOptions"
-                :key="eventType"
-                :label="eventOptionLabel(eventType)"
-                :value="eventType"
+                v-for="definition in activeSemanticDefinitions"
+                :key="definition.semanticKey"
+                :label="semanticDefinitionLabel(definition)"
+                :value="definition.semanticKey"
               />
             </el-select>
           </el-form-item>
@@ -405,16 +401,14 @@
             <el-select
               v-model="widgetConfigForm.returnEvent"
               filterable
-              allow-create
-              default-first-option
               style="width: 100%"
               :placeholder="t('metrics.widgetConfig.eventPlaceholder')"
             >
               <el-option
-                v-for="eventType in dashboardEventTypeOptions"
-                :key="eventType"
-                :label="eventOptionLabel(eventType)"
-                :value="eventType"
+                v-for="definition in activeSemanticDefinitions"
+                :key="definition.semanticKey"
+                :label="semanticDefinitionLabel(definition)"
+                :value="definition.semanticKey"
               />
             </el-select>
           </el-form-item>
@@ -469,7 +463,12 @@ import {
   type DashboardExtensionConfig,
   type DashboardWidgetExtension,
 } from '@/extensions/dashboard'
-import { getEventCatalog, type EventCatalogEntry } from '@/api/semantic'
+import {
+  getEventCatalog,
+  getSemanticDefinitions,
+  type EventCatalogEntry,
+  type SemanticDefinition,
+} from '@/api/semantic'
 import {
   getProjectDashboards,
   upsertProjectDashboard,
@@ -492,7 +491,6 @@ import {
   getTrafficMetrics,
   getTrafficTrends,
   getTopPages,
-  getCounterEventTypes,
   type MetricsOverview,
   type MetricsTopEvents,
   type MetricsTrends,
@@ -650,6 +648,7 @@ const productFunnel = ref<FunnelResponse | null>(null)
 const retention = ref<RetentionResponse | null>(null)
 const dashboardAnalyticsConfig = ref<DashboardAnalyticsConfig>({})
 const semanticEventCatalog = ref<EventCatalogEntry[]>([])
+const semanticDefinitions = ref<SemanticDefinition[]>([])
 
 // Paged Results
 const events = reactive<PagedResult<EventRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
@@ -658,7 +657,6 @@ const sessions = reactive<PagedResult<SessionRecord>>({ projectId: '', rangeStar
 const traffic = reactive<PagedResult<TrafficMetricRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
 
 // Dialogs & Form
-const counterEventTypes = ref<string[]>([])
 const widgetConfigDialogVisible = ref(false)
 const widgetConfigType = ref('')
 const widgetConfigTargetId = ref('')
@@ -677,10 +675,9 @@ const widgetConfigTarget = computed(() =>
 )
 const widgetConfigMinWidth = computed(() => widgetConfigTarget.value?.minW || 2)
 const widgetConfigMinHeight = computed(() => widgetConfigTarget.value?.minH || 2)
-const dashboardEventTypeOptions = computed(() => Array.from(new Set([
-  ...counterEventTypes.value,
-  ...semanticEventCatalog.value.map((entry) => entry.rawKey),
-])).sort())
+const activeSemanticDefinitions = computed(() => semanticDefinitions.value
+  .filter((definition) => definition.isActive)
+  .sort((left, right) => left.semanticKey.localeCompare(right.semanticKey)))
 
 // Loading States
 const overviewLoading = ref(false)
@@ -731,9 +728,13 @@ const eventDisplayName = (rawKey: string) => {
   }
   return Object.values(names)[0] || rawKey
 }
-const eventOptionLabel = (rawKey: string) => {
-  const displayName = eventDisplayName(rawKey)
-  return displayName === rawKey ? rawKey : `${displayName} · ${rawKey}`
+const semanticDefinitionLabel = (definition: SemanticDefinition) => {
+  const preferred = locale.value === 'zh'
+    ? ['zh-CN', 'zh', 'default', 'en']
+    : ['en', 'default', 'zh-CN', 'zh']
+  const name = preferred.map((key) => definition.displayName[key]).find(Boolean)
+    || Object.values(definition.displayName)[0]
+  return name ? `${name} · ${definition.semanticKey}` : definition.semanticKey
 }
 
 const requireProject = () => {
@@ -926,7 +927,7 @@ const openWidgetConfig = (item: DashboardItem) => {
       : '1, 7, 30'
   }
   widgetConfigDialogVisible.value = true
-  if (type === 'core.productFunnel' || type === 'core.retention') void loadCounterEventTypeOptions()
+  if (type === 'core.productFunnel' || type === 'core.retention') void loadSemanticDefinitions()
 }
 
 const addWidgetType = (type: string) => {
@@ -940,7 +941,7 @@ const addWidgetType = (type: string) => {
     widgetConfigTargetId.value = ''
     widgetConfigType.value = type
     widgetConfigDialogVisible.value = true
-    void loadCounterEventTypeOptions()
+    void loadSemanticDefinitions()
     return
   }
   appendWidgetType(type)
@@ -1410,7 +1411,7 @@ const loadTopEvents = async (context: ProjectRequestContext = captureProjectCont
   if (!requireProject()) return
   const config = configForWidget('core.topEvents')
   const configuredLimit = typeof config.limit === 'number' ? config.limit : context.snapshot.topEventsLimit
-  const aggregation = config.aggregation === 'semantic' ? 'semantic' as const : 'raw' as const
+  const aggregation = config.aggregation === 'raw' ? 'raw' as const : 'semantic' as const
   topEventsLoading.value = true
   try {
     const res = await getTopEvents(cleanParams({
@@ -1593,15 +1594,14 @@ const loadRetention = async (context: ProjectRequestContext = captureProjectCont
 }
 
 // --- 7. Action Handlers ---
-const loadCounterEventTypeOptions = async () => {
+const loadSemanticDefinitions = async () => {
   const projectId = filters.projectId
   if (!projectId) return
   try {
-    const response = await getCounterEventTypes({ projectId })
-    if (filters.projectId === projectId) counterEventTypes.value = response.data.data
+    const response = await getSemanticDefinitions(projectId)
+    if (filters.projectId === projectId) semanticDefinitions.value = response.data.data.items
   } catch {
-    // The select still accepts a typed event key when metadata cannot be loaded.
-    if (filters.projectId === projectId) counterEventTypes.value = []
+    if (filters.projectId === projectId) semanticDefinitions.value = []
   }
 }
 
@@ -1657,6 +1657,9 @@ const refreshAll = async () => {
     const loadPromises: Promise<void>[] = []
     if (widgetTypes.some((type) => type === 'core.topEvents' || type === 'core.events')) {
       loadPromises.push(loadSemanticEventCatalog(context))
+    }
+    if (widgetTypes.some((type) => type === 'core.productFunnel' || type === 'core.retention')) {
+      loadPromises.push(loadSemanticDefinitions())
     }
     for (const type of widgetTypes) {
       if (type === 'core.overview') loadPromises.push(loadOverview(context))
@@ -1838,7 +1841,7 @@ const clearProjectScopedState = () => {
   productFunnel.value = null
   retention.value = null
   semanticEventCatalog.value = []
-  counterEventTypes.value = []
+  semanticDefinitions.value = []
   widgetConfigDialogVisible.value = false
   widgetConfigType.value = ''
   widgetConfigTargetId.value = ''
