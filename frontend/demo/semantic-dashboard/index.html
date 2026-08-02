@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AnalyticsHub 项目与 Dashboard Demo</title>
+  <style>
+    :root { color:#1d1d1f; background:#f5f5f7; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-width:320px; background:#f5f5f7; }
+    button,input,select { font:inherit; }
+    button { cursor:pointer; }
+    button:disabled { cursor:not-allowed; opacity:.45; }
+    code { font:12px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .hidden { display:none !important; }
+    .shell { position:sticky; top:0; z-index:30; display:grid; grid-template-columns:auto minmax(320px,1fr); align-items:center; min-height:58px; padding:0 max(24px,calc((100vw - 1500px)/2)); background:rgba(250,250,252,.96); border-bottom:1px solid rgba(0,0,0,.1); backdrop-filter:blur(18px); }
+    .shell-left { display:flex; align-items:center; align-self:stretch; }
+    .home-button { display:grid; place-items:center; width:34px; height:34px; padding:0; color:#515154; border:0; border-radius:8px; background:transparent; }
+    .home-button:hover { color:#0066cc; background:#edf5fc; }
+    .home-button svg { width:18px; height:18px; }
+    .project-anchor { position:relative; margin-left:7px; }
+    .project-dynamic-nav { display:flex; align-self:stretch; justify-content:center; min-width:0; overflow-x:auto; }
+    .project-dynamic-nav button { padding:0 14px; color:#515154; border:0; border-bottom:2px solid transparent; background:transparent; font-size:13px; white-space:nowrap; }
+    .project-dynamic-nav button.active { color:#1d1d1f; border-bottom-color:#0071e3; font-weight:600; }
+    .project-switch { display:flex; align-items:center; gap:8px; max-width:220px; min-height:34px; padding:6px 10px; color:#1d1d1f; border:0; border-radius:8px; background:transparent; font-weight:600; }
+    .project-switch:hover { background:#ededf0; }
+    .project-switch span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .project-popover { position:absolute; top:45px; left:0; width:290px; padding:10px; background:#fff; border:1px solid rgba(0,0,0,.12); border-radius:12px; box-shadow:0 14px 40px rgba(0,0,0,.16); }
+    .project-popover input { width:100%; min-height:36px; padding:7px 9px; border:1px solid rgba(0,0,0,.16); border-radius:8px; }
+    .project-options { display:grid; gap:3px; margin-top:8px; }
+    .project-option { display:grid; gap:2px; padding:9px; text-align:left; color:#1d1d1f; border:0; border-radius:8px; background:transparent; }
+    .project-option:hover,.project-option.active { background:#edf5fc; }
+    .project-option small { color:#6e6e73; }
+    main { max-width:1280px; margin:0 auto; padding:32px 28px 60px; }
+    .page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:20px; margin-bottom:20px; }
+    .page-head h1 { margin:0 0 7px; font-size:28px; letter-spacing:-.025em; }
+    .page-head p,.muted { margin:0; color:#6e6e73; font-size:13px; line-height:1.5; }
+    .actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .btn { padding:8px 13px; color:#1d1d1f; background:#fff; border:1px solid rgba(0,0,0,.16); border-radius:8px; }
+    .btn:hover { border-color:#0071e3; }
+    .btn.primary { color:#fff; background:#0071e3; border-color:#0071e3; }
+    .btn.ghost { color:#0066cc; background:transparent; border-color:transparent; }
+    .btn.small { padding:5px 8px; font-size:12px; }
+    .card { background:#fff; border:1px solid rgba(0,0,0,.1); border-radius:12px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+    .status { display:inline-flex; padding:3px 7px; border-radius:999px; font-size:11px; }
+    .status.ok { color:#16702d; background:#e9f7ec; }
+    .status.warn { color:#9a5900; background:#fff4df; }
+    .status.info { color:#315f88; background:#edf5fc; }
+    .project-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }
+    .project-card { min-height:190px; padding:18px; text-align:left; transition:transform .15s,border-color .15s; }
+    .project-card:hover { border-color:#8fc7ff; transform:translateY(-1px); }
+    .project-main { width:100%; padding:0; text-align:left; border:0; background:transparent; }
+    .project-main h2 { margin:0 0 4px; font-size:18px; }
+    .project-meta { display:flex; gap:6px; margin:13px 0; flex-wrap:wrap; }
+    .project-facts { display:grid; gap:7px; margin:16px 0; color:#515154; font-size:12px; }
+    .new-project { display:grid; place-items:center; min-height:190px; padding:24px; color:#0066cc; background:transparent; border:1.5px dashed #8bbce8; border-radius:12px; text-align:center; }
+    .new-project strong { display:block; margin-bottom:7px; font-size:17px; }
+    .new-project span { color:#6e6e73; font-size:12px; }
+    .wizard { overflow:hidden; }
+    .wizard-progress { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:16px 18px; border-bottom:1px solid rgba(0,0,0,.08); }
+    .wizard-step { padding-top:9px; color:#86868b; border-top:3px solid #d8d8dc; font-size:11px; }
+    .wizard-step.active { color:#0066cc; border-color:#0071e3; font-weight:600; }
+    .wizard-step.done { color:#397549; border-color:#72b883; }
+    .wizard-body { padding:22px; }
+    .wizard-body h2 { margin:0 0 5px; font-size:19px; }
+    .wizard-footer { display:flex; justify-content:space-between; padding:15px 18px; border-top:1px solid rgba(0,0,0,.08); }
+    .form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; margin-top:18px; }
+    .field { display:grid; gap:6px; }
+    .field label { color:#515154; font-size:12px; font-weight:600; }
+    .field input,.field select { width:100%; min-height:38px; padding:8px 10px; border:1px solid rgba(0,0,0,.18); border-radius:8px; background:#fff; }
+    .template-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:11px; margin-top:16px; }
+    .template { min-height:145px; padding:15px; text-align:left; border:1px solid rgba(0,0,0,.12); border-radius:10px; background:#fafafa; }
+    .template.selected { border-color:#0071e3; box-shadow:0 0 0 2px rgba(0,113,227,.13); background:#f5faff; }
+    .template strong { display:block; margin-bottom:6px; }
+    .template p { margin:0 0 12px; color:#6e6e73; font-size:12px; line-height:1.45; }
+    .chips { display:flex; gap:5px; flex-wrap:wrap; }
+    .chip { display:inline-flex; padding:3px 7px; color:#515154; background:#ededf0; border-radius:999px; font-size:11px; }
+    .summary-list { display:grid; grid-template-columns:140px 1fr; gap:10px; margin-top:18px; padding:16px; background:#f7f7f9; border-radius:10px; font-size:13px; }
+    .summary-list div:nth-child(odd) { color:#6e6e73; }
+    .workspace-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:52px; padding:8px 10px; margin-bottom:13px; }
+    .workspace-toolbar .actions { gap:6px; }
+    .workspace-toolbar .btn { min-height:32px; padding:5px 10px; font-size:12px; }
+    .workspace-toolbar .chip,.workspace-toolbar .status { min-height:26px; align-items:center; }
+    .segmented { display:inline-flex; padding:3px; background:#e8e8ed; border-radius:9px; }
+    .segmented button { min-width:90px; padding:7px 11px; color:#6e6e73; border:0; border-radius:7px; background:transparent; }
+    .segmented button.active { color:#1d1d1f; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.13); font-weight:600; }
+    .edit-bar { padding:13px 15px; margin-bottom:13px; border-color:#8fc7ff; }
+    .dashboard { display:grid; grid-template-columns:repeat(12,minmax(0,1fr)); grid-auto-rows:54px; grid-auto-flow:dense; gap:12px; }
+    .widget { position:relative; min-width:0; padding:15px; overflow:hidden; background:#fff; border:1px solid rgba(0,0,0,.1); border-radius:12px; }
+    .widget.editing { overflow:visible; border:1.5px dashed #4c94da; user-select:none; }
+    .widget.dragging { opacity:.45; }
+    .widget-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+    .widget.editing .widget-head { cursor:grab; }
+    .widget.editing .widget-head:active { cursor:grabbing; }
+    .widget h3 { margin:0 0 4px; font-size:14px; }
+    .widget-actions { display:flex; gap:3px; }
+    .value { margin-top:21px; font-size:31px; font-weight:600; letter-spacing:-.03em; }
+    .value small { color:#6e6e73; font-size:13px; font-weight:400; }
+    .bars { display:flex; align-items:end; gap:6px; height:88px; margin-top:17px; }
+    .bars span { flex:1; min-width:4px; background:#8fc7ff; border-radius:3px 3px 0 0; }
+    .funnel { display:grid; gap:7px; margin-top:14px; }
+    .funnel div { height:25px; padding:5px 8px; background:#dceeff; border-radius:5px; font-size:11px; }
+    .resize-handle { position:absolute; right:-5px; bottom:-5px; width:20px; height:20px; cursor:nwse-resize; }
+    .resize-handle::after { content:""; position:absolute; right:4px; bottom:4px; width:8px; height:8px; border-right:2px solid #0071e3; border-bottom:2px solid #0071e3; }
+    .hint { padding:11px 13px; margin-bottom:13px; color:#3f5060; background:#f0f7ff; border:1px solid #cce4ff; border-radius:9px; font-size:12px; }
+    .table-card { padding:17px; }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th,td { padding:11px 10px; border-bottom:1px solid rgba(0,0,0,.08); text-align:left; vertical-align:top; }
+    th { color:#6e6e73; font-size:11px; }
+    tr:last-child td { border-bottom:0; }
+    .empty-panel { display:grid; place-items:center; min-height:300px; padding:30px; text-align:center; }
+    .empty-panel h2 { margin:0 0 7px; }
+    .modal-backdrop { position:fixed; inset:0; z-index:60; display:none; place-items:center; padding:20px; background:rgba(0,0,0,.28); }
+    .modal-backdrop.open { display:grid; }
+    .modal { width:min(600px,100%); max-height:calc(100vh - 40px); overflow:auto; padding:20px; background:#fff; border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.22); }
+    .modal h2 { margin:0 0 5px; }
+    .modal .field,.modal .form-grid { margin-top:12px; }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+    .toast { position:fixed; z-index:80; left:50%; bottom:28px; translate:-50% 14px; padding:10px 14px; color:#fff; background:rgba(29,29,31,.94); border-radius:9px; font-size:12px; opacity:0; pointer-events:none; transition:.2s; }
+    .toast.show { opacity:1; translate:-50% 0; }
+    @media(max-width:800px){
+      .shell{grid-template-columns:auto 1fr;padding:0 14px}.project-dynamic-nav{grid-column:1/-1;order:3;height:42px;border-top:1px solid rgba(0,0,0,.06)}.project-dynamic-nav:empty{display:none}.project-switch{max-width:150px}
+      main{padding:22px 15px 45px}.page-head{flex-direction:column}.form-grid{grid-template-columns:1fr}.dashboard{grid-template-columns:1fr;grid-auto-rows:auto}.widget{grid-column:1!important;grid-row:auto!important;min-height:180px}.resize-handle{display:none}.summary-list{grid-template-columns:1fr}.summary-list div:nth-child(even){margin-bottom:5px}
+    }
+  </style>
+</head>
+<body>
+  <header class="shell">
+    <div class="shell-left"><button class="home-button" id="home-button" aria-label="返回项目管理"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3.5 10.5 12 3.8l8.5 6.7"/><path d="M5.5 9.2v10h13v-10M9.5 19.2v-6h5v6"/></svg></button><div class="project-anchor"><button class="project-switch" id="project-switch"><span id="current-project-name">项目管理</span><b id="project-switch-chevron" class="hidden">⌄</b></button><div class="project-popover hidden" id="project-popover"><input id="project-search" type="search" placeholder="搜索项目" aria-label="搜索项目" /><div class="project-options" id="project-options"></div></div></div></div>
+    <nav class="project-dynamic-nav" id="project-dynamic-nav" aria-label="当前项目功能"></nav>
+  </header>
+
+  <main>
+    <section id="projects-view">
+      <div class="page-head"><div><h1>项目</h1><p>管理 AnalyticsHub 当前接入的全部项目。</p></div></div>
+      <div class="project-grid" id="project-grid"></div>
+    </section>
+
+    <section id="create-view" class="hidden">
+      <div class="page-head"><div><h1>新建项目</h1><p>完成基础信息和分析模板选择后，系统初始化项目工作台。</p></div></div>
+      <div class="card wizard">
+        <div class="wizard-progress">
+          <div class="wizard-step active" data-create-progress="1">1. 基础信息</div>
+          <div class="wizard-step" data-create-progress="2">2. 分析模板</div>
+          <div class="wizard-step" data-create-progress="3">3. 确认创建</div>
+        </div>
+        <div class="wizard-body">
+          <div id="create-step-1"><h2>项目基础信息</h2><p class="muted">项目 ID 创建后作为稳定标识使用。</p><div class="form-grid"><div class="field"><label for="new-name">项目名称</label><input id="new-name" value="新项目" /></div><div class="field"><label for="new-id">项目 ID</label><input id="new-id" value="new_product" /></div></div></div>
+          <div id="create-step-2" class="hidden"><h2>选择项目分析模板</h2><p class="muted">模板决定初始分析空间、官方语义和默认组件，创建后仍可调整。</p><div class="template-grid" id="template-grid"></div></div>
+          <div id="create-step-3" class="hidden"><h2>确认初始化内容</h2><p class="muted">创建后会直接进入项目数据大屏。</p><div class="summary-list" id="create-summary"></div></div>
+        </div>
+        <div class="wizard-footer"><button class="btn" id="create-back">取消</button><button class="btn primary" id="create-next">下一步</button></div>
+      </div>
+    </section>
+
+    <section id="workspace-view" class="hidden">
+      <div id="dashboard-panel">
+        <div class="card workspace-toolbar">
+          <div class="segmented" id="space-switch"></div>
+          <div class="actions"><span class="chip">2026-07-04 至 2026-08-02</span><button class="btn" id="refresh-dashboard">刷新</button><button class="btn" id="edit-dashboard">调整布局</button></div>
+        </div>
+        <div class="card edit-bar hidden" id="edit-bar"><div class="actions" style="justify-content:space-between"><div><strong>页面调整模式</strong><p class="muted">拖动组件标题调整位置，拖动右下角调整大小；点击完成后直接保存生效。</p></div><div class="actions"><button class="btn" id="add-widget">添加组件</button><button class="btn" id="reset-layout">恢复默认</button><button class="btn" id="cancel-layout">取消</button><button class="btn primary" id="finish-layout">完成</button></div></div></div>
+        <div class="hint hidden" id="layout-hint">编辑状态下，组件内部交互暂停，防止拖动和图表操作冲突。</div>
+        <div class="dashboard" id="dashboard-grid"></div>
+      </div>
+
+      <div id="dictionary-panel" class="hidden">
+        <div class="hint">左侧保留项目真实上报的 Key，右侧维护稳定语义。修改映射不会重写历史事件。</div>
+        <div class="card table-card"><table><thead><tr><th>原始事件 Key</th><th>语义 Key</th><th>项目展示名称</th><th>状态</th><th>操作</th></tr></thead><tbody id="dictionary-table"></tbody></table></div>
+      </div>
+      <div id="counter-panel" class="hidden">
+        <div class="card workspace-toolbar"><div><strong>计数器</strong><p class="muted">管理需要长期累计的业务数字。</p></div><button class="btn" id="create-counter">新建计数器</button></div>
+        <div class="card table-card"><table><thead><tr><th>业务名称</th><th>Counter Key</th><th>当前累计值</th><th>自动递增规则</th><th>状态</th><th>操作</th></tr></thead><tbody><tr><td><strong>累计完成信件</strong></td><td><code>letters_completed</code></td><td><strong id="counter-value">12,850</strong> 封</td><td><code>product.core_action.completed</code> · 每次 +1</td><td><span class="status ok">运行中</span></td><td><button class="btn small ghost" id="adjust-counter">校正</button></td></tr></tbody></table></div>
+      </div>
+      <div id="placeholder-panel" class="hidden"><div class="card empty-panel"><div><h2 id="placeholder-title">功能页面</h2><p class="muted">Demo 只展示项目结构和页面入口，本页暂不模拟具体业务。</p></div></div></div>
+    </section>
+  </main>
+
+  <div class="modal-backdrop" id="widget-modal" role="dialog" aria-modal="true" aria-labelledby="widget-modal-title"><div class="modal"><h2 id="widget-modal-title">添加组件</h2><p class="muted">组件引用语义指标，不直接绑定客户端原始 Key。</p><div class="field"><label for="widget-key">指标语义</label><select id="widget-key"></select></div><div class="form-grid"><div class="field"><label for="widget-type">展示形式</label><select id="widget-type"><option value="number">数字卡片</option><option value="trend">趋势图</option><option value="funnel">转化漏斗</option></select></div><div class="field"><label for="widget-title">组件标题</label><input id="widget-title" /></div></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn primary" id="save-widget">添加组件</button></div></div></div>
+  <div class="modal-backdrop" id="mapping-modal" role="dialog" aria-modal="true" aria-labelledby="mapping-title"><div class="modal"><h2 id="mapping-title">配置语义映射</h2><p class="muted">修改中间映射关系，不重写历史事件。</p><div class="field"><label for="mapping-raw">原始事件 Key</label><input id="mapping-raw" readonly /></div><div class="field"><label for="mapping-semantic">语义 Key</label><select id="mapping-semantic"><option value="app.lifecycle.launched">app.lifecycle.launched</option><option value="product.core_action.started">product.core_action.started</option><option value="product.core_action.completed">product.core_action.completed</option><option value="commerce.paywall.opened">commerce.paywall.opened</option><option value="custom.stationery.beautification.applied">custom.stationery.beautification.applied</option></select></div><div class="field"><label for="mapping-name">项目展示名称</label><input id="mapping-name" /></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn primary" id="save-mapping">保存映射</button></div></div></div>
+  <div class="modal-backdrop" id="counter-modal" role="dialog" aria-modal="true" aria-labelledby="counter-modal-title"><div class="modal"><h2 id="counter-modal-title">校正累计完成信件</h2><p class="muted">人工校正需要填写原因，真实系统会保留审计记录。</p><div class="field"><label for="counter-adjustment">调整数量</label><input id="counter-adjustment" type="number" value="-25" /></div><div class="field"><label for="counter-reason">调整原因</label><input id="counter-reason" value="排除历史测试事件" /></div><div class="summary-list"><div>当前值</div><div id="counter-current-value">12,850</div><div>调整后</div><div id="counter-next-value">12,825</div></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn primary" id="save-counter-adjustment">确认校正</button></div></div></div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const templates=[
+      {id:'website',name:'展示型网站',desc:'以网站访问、来源和页面为中心。',spaces:[['traffic','网站流量']],chips:['PV / UV','来源','页面排行']},
+      {id:'app',name:'APP 产品分析',desc:'以启动、核心行为、转化和留存为中心。',spaces:[['app','APP 运营']],chips:['APP 启动','核心动作','付费转化']},
+      {id:'webapp',name:'WebApp / SaaS',desc:'同时初始化产品行为和网站流量。',spaces:[['product','产品运营'],['traffic','网站流量']],chips:['产品运营','网站流量']},
+      {id:'blank',name:'空白项目',desc:'不初始化组件，从空工作台开始。',spaces:[['custom','自定义分析']],chips:['完全自定义']}
+    ];
+    let projects=[{id:'memobox_prod',name:'Memobox',template:'app',lastData:'2 分钟前'}];
+    const semanticDefinitions=[
+      {raw:'app_launch',key:'app.lifecycle.launched',name:'APP 启动',mapped:true},
+      {raw:'authoring_started',key:'product.core_action.started',name:'开始写信',mapped:true},
+      {raw:'letter_created',key:'product.core_action.completed',name:'完成信件',mapped:true},
+      {raw:'letter_saved',key:'product.core_action.completed',name:'完成信件',mapped:true},
+      {raw:'paywall_viewed',key:'commerce.paywall.opened',name:'付费页面打开',mapped:true},
+      {raw:'stationery_beautification_applied',key:'',name:'',mapped:false}
+    ];
+    const layouts={};
+    let createStep=1,selectedTemplate='app',activeProject=null,activeSection='dashboard',activeSpace='',editing=false,editingLayout=null,editingWidgetId=null,draggingId=null,counterValue=12850;
+    const $=id=>document.getElementById(id),clone=value=>JSON.parse(JSON.stringify(value));
+    const templateFor=id=>templates.find(item=>item.id===id);
+    function defaultsFor(project){
+      const space=templateFor(project.template).spaces[0][0];
+      if(project.template==='website') return [{id:uid(),space,title:'访问次数',key:'web.page.viewed',type:'number',w:4,h:3,value:'6,120'},{id:uid(),space,title:'独立访客',key:'web.visitor.active',type:'number',w:4,h:3,value:'2,840'},{id:uid(),space,title:'访问趋势',key:'web.page.viewed',type:'trend',w:8,h:4}];
+      if(project.template==='blank') return [];
+      const widgets=[{id:uid(),space:project.template==='webapp'?'product':space,title:'APP 启动次数',key:'app.lifecycle.launched',type:'number',w:4,h:3,value:'3,268'},{id:uid(),space:project.template==='webapp'?'product':space,title:'累计完成信件',key:'product.core_action.completed',type:'number',w:4,h:3,value:'12,850'},{id:uid(),space:project.template==='webapp'?'product':space,title:'核心动作趋势',key:'product.core_action.completed',type:'trend',w:8,h:4},{id:uid(),space:project.template==='webapp'?'product':space,title:'付费转化漏斗',key:'commerce.paywall.opened',type:'funnel',w:12,h:4}];
+      if(project.template==='webapp') widgets.push({id:uid(),space:'traffic',title:'页面访问',key:'web.page.viewed',type:'trend',w:8,h:4},{id:uid(),space:'traffic',title:'独立访客',key:'web.visitor.active',type:'number',w:4,h:3,value:'2,840'});
+      return widgets;
+    }
+    function uid(){return `w_${Date.now()}_${Math.random().toString(16).slice(2)}`;}
+    function ensureLayout(project){if(!layouts[project.id])layouts[project.id]={saved:defaultsFor(project)};return layouts[project.id];}
+    function showOnly(id){['projects-view','create-view','workspace-view'].forEach(view=>$(view).classList.toggle('hidden',view!==id));window.scrollTo({top:0,behavior:'smooth'});}
+    function toast(message){$('toast').textContent=message;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),1700);}
+    function renderProjects(){
+      renderGlobalHeader('项目管理');
+      $('project-grid').innerHTML=projects.map(project=>{const template=templateFor(project.template);return `<article class="card project-card"><button class="project-main" data-enter-project="${project.id}"><h2>${project.name}</h2><code>${project.id}</code><div class="project-meta"><span class="status ok">正常运行</span><span class="status info">${template.name}</span></div><div class="project-facts"><span>最近数据：${project.lastData}</span></div></button></article>`}).join('')+`<button class="new-project" id="new-project-card"><div><strong>＋ 新建项目</strong><span>创建项目并选择分析模板</span></div></button>`;
+      document.querySelectorAll('[data-enter-project]').forEach(button=>button.onclick=()=>enterProject(button.dataset.enterProject));
+      $('new-project-card').onclick=openCreate;
+    }
+    function openProjects(){activeProject=null;editing=false;editingLayout=null;renderProjects();showOnly('projects-view');}
+    function openCreate(){activeProject=null;renderGlobalHeader('新建项目');createStep=1;selectedTemplate='app';renderTemplates();renderCreateStep();showOnly('create-view');}
+    function renderTemplates(){$('template-grid').innerHTML=templates.map(item=>`<button class="template ${item.id===selectedTemplate?'selected':''}" data-template="${item.id}"><strong>${item.name}</strong><p>${item.desc}</p><span class="chips">${item.chips.map(chip=>`<span class="chip">${chip}</span>`).join('')}</span></button>`).join('');document.querySelectorAll('[data-template]').forEach(button=>button.onclick=()=>{selectedTemplate=button.dataset.template;renderTemplates();});}
+    function renderCreateStep(){
+      [1,2,3].forEach(step=>{$(`create-step-${step}`).classList.toggle('hidden',step!==createStep);const progress=document.querySelector(`[data-create-progress="${step}"]`);progress.classList.toggle('active',step===createStep);progress.classList.toggle('done',step<createStep);});
+      $('create-back').textContent=createStep===1?'取消':'上一步';$('create-next').textContent=createStep===3?'创建并进入工作台':'下一步';
+      if(createStep===3){const template=templateFor(selectedTemplate);$('create-summary').innerHTML=`<div>项目名称</div><div>${$('new-name').value}</div><div>项目 ID</div><div><code>${$('new-id').value}</code></div><div>分析模板</div><div>${template.name}</div><div>分析空间</div><div>${template.spaces.map(item=>item[1]).join('、')}</div><div>初始化内容</div><div>官方语义、默认 Dashboard</div>`;}
+    }
+    function createNext(){
+      if(createStep===1&&(!$('new-name').value.trim()||!$('new-id').value.trim()))return toast('请填写项目名称和项目 ID');
+      if(createStep<3){createStep++;renderCreateStep();return;}
+      const id=$('new-id').value.trim();if(projects.some(item=>item.id===id))return toast('项目 ID 已存在');
+      const project={id,name:$('new-name').value.trim(),template:selectedTemplate,lastData:'尚未收到'};projects.push(project);ensureLayout(project);enterProject(id);
+    }
+    function enterProject(id,section='dashboard'){
+      activeProject=projects.find(item=>item.id===id);if(!activeProject)return;ensureLayout(activeProject);activeSpace=templateFor(activeProject.template).spaces[0][0];editing=false;editingLayout=null;renderWorkspaceHeader();switchProjectSection(section);showOnly('workspace-view');
+    }
+    function renderGlobalHeader(label='项目管理'){$('project-dynamic-nav').innerHTML='';$('current-project-name').textContent=label;$('project-switch').classList.remove('hidden');$('project-switch-chevron').classList.add('hidden');$('project-popover').classList.add('hidden');}
+    function renderWorkspaceHeader(){
+      const template=templateFor(activeProject.template);$('current-project-name').textContent=activeProject.name;$('project-switch').classList.remove('hidden');$('project-switch-chevron').classList.remove('hidden');
+      const navItems=[['dashboard','数据大屏'],['dictionary','指标字典'],['counter','计数器'],['privacy','隐私工单']];$('project-dynamic-nav').innerHTML=navItems.map(([id,label])=>`<button class="${id===activeSection?'active':''}" data-project-section="${id}">${label}</button>`).join('');document.querySelectorAll('[data-project-section]').forEach(button=>button.onclick=()=>switchProjectSection(button.dataset.projectSection));renderProjectOptions();
+      $('space-switch').innerHTML=template.spaces.map(([id,label])=>`<button class="${id===activeSpace?'active':''}" data-space="${id}">${label}</button>`).join('');$('space-switch').classList.toggle('hidden',template.spaces.length===1);document.querySelectorAll('[data-space]').forEach(button=>button.onclick=()=>{activeSpace=button.dataset.space;renderWorkspaceHeader();renderDashboard();});
+    }
+    function renderProjectOptions(query=''){const normalized=query.trim().toLowerCase(),matches=projects.filter(project=>`${project.name} ${project.id}`.toLowerCase().includes(normalized));$('project-options').innerHTML=matches.map(project=>`<button class="project-option ${activeProject?.id===project.id?'active':''}" data-switch-project="${project.id}"><strong>${project.name}</strong><small>${project.id}</small></button>`).join('')||'<div class="muted" style="padding:10px">没有匹配项目</div>';document.querySelectorAll('[data-switch-project]').forEach(button=>button.onclick=()=>{const section=activeSection;closeProjectPopover();enterProject(button.dataset.switchProject,section);});}
+    function closeProjectPopover(){$('project-popover').classList.add('hidden');}
+    const sectionNames={dashboard:'数据大屏',dictionary:'指标字典',counter:'计数器',privacy:'隐私工单'};
+    function switchProjectSection(section){
+      activeSection=section;document.querySelectorAll('[data-project-section]').forEach(button=>button.classList.toggle('active',button.dataset.projectSection===section));
+      ['dashboard-panel','dictionary-panel','counter-panel','placeholder-panel'].forEach(id=>$(id).classList.add('hidden'));
+      if(section==='dashboard'){$('dashboard-panel').classList.remove('hidden');renderDashboard();}
+      else if(section==='dictionary'){$('dictionary-panel').classList.remove('hidden');renderDictionary();}
+      else if(section==='counter')$('counter-panel').classList.remove('hidden');
+      else{$('placeholder-panel').classList.remove('hidden');$('placeholder-title').textContent=sectionNames[section];}
+      renderWorkspaceHeader();
+    }
+    function widgetBody(widget){
+      if(widget.type==='number')return `<div class="value">${widget.value||'1,286'} <small>${widget.title.includes('信件')?'封':'次'}</small></div><p class="muted">Mock · 当前统计口径</p>`;
+      if(widget.type==='funnel')return `<div class="funnel"><div style="width:100%">付费页面打开 · 1,240</div><div style="width:70%">发起购买 · 486</div><div style="width:44%">购买完成 · 218</div></div>`;
+      return `<div class="bars">${[45,62,38,70,54,82,76,95,66,88].map(height=>`<span style="height:${height}%"></span>`).join('')}</div>`;
+    }
+    function renderDashboard(){
+      if(!activeProject)return;const layout=ensureLayout(activeProject),widgets=(editing?editingLayout:layout.saved).filter(widget=>widget.space===activeSpace);$('edit-dashboard').classList.toggle('hidden',editing);$('edit-bar').classList.toggle('hidden',!editing);$('layout-hint').classList.toggle('hidden',!editing);
+      $('dashboard-grid').innerHTML=widgets.length?widgets.map(widget=>`<article class="widget ${editing?'editing':''}" data-widget="${widget.id}" style="grid-column:span ${widget.w};grid-row:span ${widget.h}"><div class="widget-head" ${editing?'draggable="true" tabindex="0" aria-label="拖动调整组件位置；也可按 Alt 加左右方向键调整顺序"':''}><div><h3>${widget.title}</h3><code>${widget.key}</code></div>${editing?`<div class="widget-actions"><button class="btn small ghost" data-config="${widget.id}">配置</button><button class="btn small ghost" data-delete="${widget.id}">移除</button></div>`:''}</div>${widgetBody(widget)}${editing?'<span class="resize-handle" tabindex="0" role="separator" aria-label="拖动调整组件大小；也可使用方向键缩放"></span>':''}</article>`).join(''):`<div class="card empty-panel" style="grid-column:1/-1"><div><h2>当前分析空间还没有组件</h2><p class="muted">点击“调整布局”后添加组件。</p></div></div>`;
+      if(editing)bindLayoutInteractions();
+    }
+    function startEditing(){editingLayout=clone(ensureLayout(activeProject).saved);editing=true;renderDashboard();}
+    function bindLayoutInteractions(){
+      document.querySelectorAll('[data-config]').forEach(button=>button.onclick=event=>{event.stopPropagation();openWidgetModal(button.dataset.config);});document.querySelectorAll('[data-delete]').forEach(button=>button.onclick=event=>{event.stopPropagation();editingLayout=editingLayout.filter(item=>item.id!==button.dataset.delete);renderDashboard();});
+      document.querySelectorAll('.widget-head[draggable="true"]').forEach(head=>{const card=head.closest('.widget');head.ondragstart=event=>{draggingId=card.dataset.widget;card.classList.add('dragging');event.dataTransfer.effectAllowed='move';};head.ondragend=()=>{draggingId=null;card.classList.remove('dragging');};head.onkeydown=event=>{if(!event.altKey||!['ArrowLeft','ArrowRight'].includes(event.key))return;event.preventDefault();moveWidgetByKeyboard(card.dataset.widget,event.key==='ArrowLeft'?-1:1);};});
+      document.querySelectorAll('[data-widget]').forEach(card=>{card.ondragover=event=>event.preventDefault();card.ondrop=event=>{event.preventDefault();if(!draggingId||draggingId===card.dataset.widget)return;const a=editingLayout.findIndex(item=>item.id===draggingId),b=editingLayout.findIndex(item=>item.id===card.dataset.widget);[editingLayout[a],editingLayout[b]]=[editingLayout[b],editingLayout[a]];renderDashboard();};const handle=card.querySelector('.resize-handle');if(handle){handle.onpointerdown=event=>beginResize(event,card);handle.onkeydown=event=>resizeWidgetByKeyboard(event,card.dataset.widget);}});
+    }
+    function moveWidgetByKeyboard(id,direction){const index=editingLayout.findIndex(item=>item.id===id),sameSpace=editingLayout.map((item,i)=>({item,i})).filter(entry=>entry.item.space===activeSpace),position=sameSpace.findIndex(entry=>entry.i===index),target=sameSpace[position+direction];if(!target)return;[editingLayout[index],editingLayout[target.i]]=[editingLayout[target.i],editingLayout[index]];renderDashboard();}
+    function resizeWidgetByKeyboard(event,id){const widget=editingLayout.find(item=>item.id===id);if(!widget||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key))return;event.preventDefault();if(event.key==='ArrowLeft')widget.w=Math.max(3,widget.w-1);if(event.key==='ArrowRight')widget.w=Math.min(12,widget.w+1);if(event.key==='ArrowUp')widget.h=Math.max(2,widget.h-1);if(event.key==='ArrowDown')widget.h=Math.min(8,widget.h+1);renderDashboard();}
+    function beginResize(event,card){
+      event.preventDefault();event.stopPropagation();const widget=editingLayout.find(item=>item.id===card.dataset.widget),grid=$('dashboard-grid'),start={x:event.clientX,y:event.clientY,w:widget.w,h:widget.h},column=(grid.clientWidth-132)/12,row=66;
+      const move=pointer=>{widget.w=Math.max(3,Math.min(12,Math.round(start.w+(pointer.clientX-start.x)/(column+12))));widget.h=Math.max(2,Math.min(8,Math.round(start.h+(pointer.clientY-start.y)/row)));card.style.gridColumn=`span ${widget.w}`;card.style.gridRow=`span ${widget.h}`;};
+      const up=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);renderDashboard();};document.addEventListener('pointermove',move);document.addEventListener('pointerup',up);
+    }
+    function openWidgetModal(id=null){
+      editingWidgetId=id;const options=[['app.lifecycle.launched','APP 启动'],['product.core_action.completed','核心动作完成'],['commerce.paywall.opened','付费页面打开'],['custom.stationery.beautification_applied','美化使用']];$('widget-key').innerHTML=options.map(([key,name])=>`<option value="${key}">${name} · ${key}</option>`).join('');
+      if(id){const widget=editingLayout.find(item=>item.id===id);$('widget-modal-title').textContent='配置组件';$('widget-key').value=widget.key;$('widget-type').value=widget.type;$('widget-title').value=widget.title;$('save-widget').textContent='保存配置';}else{$('widget-modal-title').textContent='添加组件';$('widget-key').value=options[0][0];$('widget-type').value='number';$('widget-title').value=options[0][1];$('save-widget').textContent='添加组件';}$('widget-modal').classList.add('open');
+    }
+    function saveWidget(){const next={title:$('widget-title').value.trim(),key:$('widget-key').value,type:$('widget-type').value};if(editingWidgetId)Object.assign(editingLayout.find(item=>item.id===editingWidgetId),next);else editingLayout.push({id:uid(),space:activeSpace,w:4,h:3,value:'1,286',...next});$('widget-modal').classList.remove('open');renderDashboard();}
+    function renderDictionary(){$('dictionary-table').innerHTML=semanticDefinitions.map((item,index)=>`<tr><td><code>${item.raw}</code></td><td>${item.mapped?`<code>${item.key}</code>`:'—'}</td><td>${item.name||'—'}</td><td><span class="status ${item.mapped?'ok':'warn'}">${item.mapped?'已连接':'待配置'}</span></td><td><button class="btn small ghost" data-dictionary-action="${index}">${item.mapped?'调整':'配置'}</button></td></tr>`).join('');document.querySelectorAll('[data-dictionary-action]').forEach(button=>button.onclick=()=>openMappingModal(Number(button.dataset.dictionaryAction)));}
+    let mappingEditIndex=-1;
+    function openMappingModal(index){mappingEditIndex=index;const item=semanticDefinitions[index];$('mapping-raw').value=item.raw;$('mapping-semantic').value=item.key||'product.core_action.completed';$('mapping-name').value=item.name;$('mapping-modal').classList.add('open');}
+    function saveMapping(){if(mappingEditIndex<0)return;const item=semanticDefinitions[mappingEditIndex];item.key=$('mapping-semantic').value;item.name=$('mapping-name').value.trim()||item.key;item.mapped=true;$('mapping-modal').classList.remove('open');renderDictionary();toast('语义映射已更新');}
+    function completeLayout(){ensureLayout(activeProject).saved=clone(editingLayout);editing=false;editingLayout=null;renderDashboard();toast('页面布局已保存并生效');}
+    function cancelLayout(){editing=false;editingLayout=null;renderDashboard();toast('已放弃本次调整');}
+    function resetLayout(){editingLayout=defaultsFor(activeProject);renderDashboard();toast('已恢复模板默认布局，点击完成后生效');}
+    function openCounterAdjustment(){$('counter-adjustment').value='-25';$('counter-reason').value='排除历史测试事件';$('counter-current-value').textContent=counterValue.toLocaleString('zh-CN');renderCounterNextValue();$('counter-modal').classList.add('open');}
+    function renderCounterNextValue(){const adjustment=Number($('counter-adjustment').value)||0;$('counter-next-value').textContent=(counterValue+adjustment).toLocaleString('zh-CN');}
+    function saveCounterAdjustment(){const adjustment=Number($('counter-adjustment').value)||0;if(!$('counter-reason').value.trim())return toast('请填写调整原因');counterValue+=adjustment;$('counter-value').textContent=counterValue.toLocaleString('zh-CN');$('counter-modal').classList.remove('open');toast('计数器已校正，并记录调整原因');}
+
+    $('home-button').onclick=openProjects;$('create-next').onclick=createNext;$('create-back').onclick=()=>{if(createStep===1)openProjects();else{createStep--;renderCreateStep();}};
+    $('project-switch').onclick=event=>{event.stopPropagation();if(!activeProject)return openProjects();$('project-popover').classList.toggle('hidden');if(!$('project-popover').classList.contains('hidden')){$('project-search').value='';renderProjectOptions();$('project-search').focus();}};$('project-search').oninput=()=>renderProjectOptions($('project-search').value);document.addEventListener('click',event=>{if(!event.target.closest('.project-anchor'))closeProjectPopover();});
+    $('edit-dashboard').onclick=startEditing;$('refresh-dashboard').onclick=()=>toast('Dashboard 数据已刷新');$('finish-layout').onclick=completeLayout;$('cancel-layout').onclick=cancelLayout;$('reset-layout').onclick=resetLayout;$('add-widget').onclick=()=>openWidgetModal();$('save-widget').onclick=saveWidget;$('save-mapping').onclick=saveMapping;$('widget-key').onchange=()=>{$('widget-title').value=$('widget-key').selectedOptions[0].textContent.split(' · ')[0];};$('adjust-counter').onclick=openCounterAdjustment;$('create-counter').onclick=()=>toast('Demo：这里进入新建计数器配置');$('counter-adjustment').oninput=renderCounterNextValue;$('save-counter-adjustment').onclick=saveCounterAdjustment;document.querySelectorAll('[data-close-modal]').forEach(button=>button.onclick=()=>button.closest('.modal-backdrop').classList.remove('open'));
+    renderProjects();
+  </script>
+</body>
+</html>
