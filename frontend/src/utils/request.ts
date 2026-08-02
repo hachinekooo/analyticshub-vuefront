@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import router from '@/router'
 import { t } from '@/i18n'
 import { isTwoFactorRequired, type TwoFactorErrorPayload } from './twoFactor'
+import { shouldAttachStoredAdminToken } from './adminToken'
 
 type ErrorPayload = TwoFactorErrorPayload
 
@@ -38,7 +39,9 @@ const service = axios.create({
 service.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('admin_token')
-    if (token) {
+    // Login verification supplies the newly entered token explicitly. Never
+    // overwrite it with a stale token left by an earlier deployment/session.
+    if (shouldAttachStoredAdminToken(token, config.headers['X-Admin-Token'])) {
       // Admin API requires header token; query/body tokens are rejected server-side.
       config.headers['X-Admin-Token'] = token
     }
