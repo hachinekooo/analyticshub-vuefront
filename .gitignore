@@ -15,6 +15,7 @@ node_modules
 # Build Output
 dist
 dist-ssr
+target
 coverage
 *.tsbuildinfo
 *.zip
