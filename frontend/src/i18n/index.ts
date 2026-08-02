@@ -428,6 +428,7 @@ const messages = {
       fields: {
         rawKey: 'Raw Key',
         semanticKey: 'Semantic Key',
+        origin: 'Source',
         meaning: 'Display Meaning',
         zhName: 'Chinese Name',
         enName: 'English Name',
@@ -992,6 +993,7 @@ const messages = {
       fields: {
         rawKey: '原始 Key',
         semanticKey: '语义 Key',
+        origin: '来源',
         meaning: '页面显示含义',
         zhName: '中文名称',
         enName: '英文名称',

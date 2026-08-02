@@ -71,10 +71,18 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column :label="t('semantics.fields.meaning')" min-width="260">
+          <el-table-column :label="t('semantics.fields.meaning')" min-width="180">
             <template #default="{ row }">
               <div class="primary-cell">{{ localizedName(row.displayName) }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('semantics.fields.semanticKey')" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
               <code>{{ row.semanticKey }}</code>
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('semantics.fields.origin')" width="90">
+            <template #default="{ row }">
               <el-tag size="small" effect="plain" :type="row.origin === 'OFFICIAL' ? 'primary' : 'info'">
                 {{ row.origin === 'OFFICIAL' ? t('semantics.origin.official') : t('semantics.origin.custom') }}
               </el-tag>
