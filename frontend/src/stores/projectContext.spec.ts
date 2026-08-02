@@ -8,9 +8,10 @@ import { useProjectContextStore } from './projectContext'
 
 const projects = [
   {
-    id: '1',
+    id: 1,
     projectId: 'project_a',
     projectName: 'Project A',
+    analysisTemplate: 'app',
     dbHost: 'localhost',
     dbPort: 5432,
     dbName: 'project_a',
@@ -20,9 +21,10 @@ const projects = [
     isActive: true,
   },
   {
-    id: '2',
+    id: 2,
     projectId: 'project_disabled',
     projectName: 'Disabled',
+    analysisTemplate: 'website',
     dbHost: 'localhost',
     dbPort: 5432,
     dbName: 'disabled',

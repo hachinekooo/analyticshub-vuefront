@@ -1,20 +1,23 @@
 <script setup lang="ts">
 import type { MetricsGranularity } from '@/api/metrics'
 import type { TrafficPlatform } from '@/utils/metricsFilters'
+import type { DashboardSpaceDefinition, DashboardSpaceKey } from '@/features/dashboard/projectDashboardTemplate'
 import { useI18n } from '@/i18n'
 
 defineProps<{
-  space: 'operations' | 'technical'
+  space: DashboardSpaceKey
+  spaces: readonly DashboardSpaceDefinition[]
   dateRange: string[] | null
   granularity: MetricsGranularity
   platform: TrafficPlatform
   userId: string
   deviceId: string
   refreshing: boolean
+  editing: boolean
 }>()
 
 const emit = defineEmits<{
-  'update:space': [value: 'operations' | 'technical']
+  'update:space': [value: DashboardSpaceKey]
   'update:dateRange': [value: string[] | null]
   'update:granularity': [value: MetricsGranularity]
   'update:userId': [value: string]
@@ -34,20 +37,15 @@ const { t } = useI18n()
         <span class="control-label">{{ t('metrics.workspace') }}</span>
         <div class="segmented-control">
           <button
+            v-for="workspace in spaces"
+            :key="workspace.key"
             type="button"
-            :class="{ 'is-active': space === 'operations' }"
-            :aria-pressed="space === 'operations'"
-            @click="emit('update:space', 'operations')"
+            :class="{ 'is-active': space === workspace.key }"
+            :aria-pressed="space === workspace.key"
+            :disabled="editing"
+            @click="emit('update:space', workspace.key)"
           >
-            {{ t('metrics.spaces.operations') }}
-          </button>
-          <button
-            type="button"
-            :class="{ 'is-active': space === 'technical' }"
-            :aria-pressed="space === 'technical'"
-            @click="emit('update:space', 'technical')"
-          >
-            {{ t('metrics.spaces.technical') }}
+            {{ t(workspace.labelKey) }}
           </button>
         </div>
       </div>
@@ -80,7 +78,7 @@ const { t } = useI18n()
             @update:model-value="emit('update:dateRange', $event)"
           />
         </el-form-item>
-        <el-form-item v-if="space === 'operations'" :label="t('filters.granularity')">
+        <el-form-item v-if="!spaces.find((item) => item.key === space)?.detailFilters" :label="t('filters.granularity')">
           <el-select
             :model-value="granularity"
             style="width: 130px"
@@ -93,7 +91,7 @@ const { t } = useI18n()
       </el-form>
     </div>
 
-    <div v-if="space === 'technical'" class="filter-section technical-filters">
+    <div v-if="spaces.find((item) => item.key === space)?.detailFilters" class="filter-section technical-filters">
       <div class="filter-heading">{{ t('metrics.detailFilters') }}</div>
       <el-form inline label-position="top" class="filter-form">
         <el-form-item :label="t('filters.platform')">

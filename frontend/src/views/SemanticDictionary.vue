@@ -216,11 +216,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import { useI18n } from '@/i18n'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import { projectIdFromParam } from '@/utils/projectRoutes'
 import {
   deleteSemanticDefinition,
   getEventCatalog,
@@ -231,8 +233,10 @@ import {
 } from '@/api/semantic'
 
 const { t, locale } = useI18n()
+const route = useRoute()
 const projectContext = useProjectContextStore()
 const { selectedProjectId } = storeToRefs(projectContext)
+const routeProjectId = computed(() => projectIdFromParam(route.params.projectId))
 const projectId = ref('')
 const catalog = ref<EventCatalogEntry[]>([])
 const definitions = ref<SemanticDefinition[]>([])
@@ -462,16 +466,17 @@ const removeDefinition = async (definition: SemanticDefinition) => {
   }
 }
 
-watch(selectedProjectId, async (nextProjectId) => {
+watch(routeProjectId, async (nextProjectId) => {
   if (!nextProjectId || nextProjectId === projectId.value) return
+  projectContext.selectProject(nextProjectId)
   projectId.value = nextProjectId
   await handleProjectChange()
 })
 
 onMounted(async () => {
   try {
-    await projectContext.ensureLoaded()
-    projectId.value = selectedProjectId.value
+    await projectContext.ensureLoaded(routeProjectId.value)
+    projectId.value = routeProjectId.value || selectedProjectId.value
     await refreshAll()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))

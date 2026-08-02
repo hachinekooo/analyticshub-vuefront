@@ -14,6 +14,7 @@ AnalyticsHub 的 Vue 3 管理端。应用以 `/analyticshub/` 为默认部署路
 ## 职责边界
 
 - `frontend/`：Vue 3 + Vite 管理端，包括多项目工作区、运营中心、语义字典和隐私工单。
+- `docs/PROJECT_WORKSPACE.md`：项目导航、分析模板、Dashboard 状态与扩展边界。
 - `docs/DEPLOYMENT.md`：只维护前端构建、静态产物和页面验收。
 - Nginx、证书、后端 JAR、systemd 和数据库由 `analyticshub-javaback` 的运维文档统一维护。
 
@@ -37,6 +38,6 @@ pnpm dev
 pnpm check
 ```
 
-开发中可分别使用 `pnpm test` / `pnpm test:watch` / `pnpm lint:check` / `pnpm type-check` / `pnpm build`。前端生产变量、构建产物和页面验收见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
+开发中可分别使用 `pnpm test` / `pnpm test:watch` / `pnpm lint:check` / `pnpm type-check` / `pnpm build`。工作区实现边界见 [`docs/PROJECT_WORKSPACE.md`](docs/PROJECT_WORKSPACE.md)，前端生产变量、构建产物和页面验收见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 
 GitHub Actions 在每次相关 push / pull request 中执行同一个 `pnpm check`，不包含发布或部署步骤。

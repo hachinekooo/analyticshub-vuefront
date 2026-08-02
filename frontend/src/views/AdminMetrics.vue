@@ -1,22 +1,17 @@
 <template>
   <div class="admin-container">
-    <PageHeader :title="t('metrics.title')" :subtitle="t('metrics.subtitle')">
-      <template #actions>
-        <el-button plain @click="goSemantics">
-          <el-icon class="el-icon--left"><CollectionTag /></el-icon>
-          {{ t('metrics.openDictionary') }}
-        </el-button>
-      </template>
-    </PageHeader>
+    <PageHeader :title="t('metrics.title')" :subtitle="t('metrics.subtitle')" />
 
     <MetricsControlBar
       :space="activeSpace"
+      :spaces="dashboardSpaces"
       :date-range="filters.dateRange"
       :granularity="filters.granularity"
       :platform="filters.platform"
       :user-id="filters.userId"
       :device-id="filters.deviceId"
       :refreshing="refreshing"
+      :editing="isLayoutEditable"
       @update:space="activeSpace = $event"
       @update:date-range="filters.dateRange = $event"
       @update:granularity="filters.granularity = $event"
@@ -24,19 +19,17 @@
       @update:device-id="filters.deviceId = $event"
       @select-platform="selectPlatform"
       @apply="applyFilters"
-      @customize="isLayoutEditable = true"
+      @customize="startLayoutEditing"
     />
 
     <DashboardEditorPanel
       :visible="isLayoutEditable"
-      :current-widgets="currentWidgetOptions"
       :available-widgets="availableWidgetTypes"
-      :custom-widget-count="registeredCustomWidgetCount"
       :saving="dashboardSaving"
       @add="addWidgetType"
       @reset="resetToDefaultLayout"
-      @save="saveServerDashboard"
-      @finish="isLayoutEditable = false"
+      @cancel="cancelLayoutEditing"
+      @complete="completeLayoutEditing"
     />
 
       <div class="workspace-area" :class="{ 'is-editing': isLayoutEditable }">
@@ -461,7 +454,14 @@ import DashboardEditorPanel from '@/components/metrics/DashboardEditorPanel.vue'
 import CounterWidget from '@/features/counters/CounterWidget.vue'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import { projectIdFromParam, projectRoute } from '@/utils/projectRoutes'
 import { trafficMetricTypeForPlatform, type TrafficPlatform } from '@/utils/metricsFilters'
+import {
+  cloneDashboardLayout,
+  dashboardSpacesForTemplate,
+  type DashboardLayoutItem,
+  type DashboardSpaceKey,
+} from '@/features/dashboard/projectDashboardTemplate'
 import {
   getDashboardWidgetExtension,
   getDashboardWidgetExtensions,
@@ -490,7 +490,6 @@ import {
   getSessions,
   getTopEvents,
   getTrafficMetrics,
-  getTrafficSummary,
   getTrafficTrends,
   getTopPages,
   getCounterEventTypes,
@@ -502,7 +501,6 @@ import {
   type EventRecord,
   type SessionRecord,
   type TrafficMetricRecord,
-  type TrafficSummary,
   type MetricsGranularity,
   type TrafficGranularity,
   type TrafficTrends,
@@ -516,17 +514,7 @@ import {
 use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
 // --- 1. Types & Interfaces ---
-interface DashboardItem {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  i: string;
-  type?: string;
-  config?: Record<string, unknown>;
-  minW?: number;
-  minH?: number;
-}
+type DashboardItem = DashboardLayoutItem
 
 interface DashboardAnalyticsConfig {
   funnel?: {
@@ -540,26 +528,27 @@ interface DashboardAnalyticsConfig {
   }
 }
 
-type DashboardSpace = 'operations' | 'technical'
 // --- 2. State & Basic Setup ---
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
-const goSemantics = () => router.push({ path: '/semantics', query: filters.projectId ? { projectId: filters.projectId } : {} })
 const projectContext = useProjectContextStore()
-const { activeProjects: projects, selectedProjectId } = storeToRefs(projectContext)
+const { activeProjects: projects, selectedProjectId, selectedProject } = storeToRefs(projectContext)
 
 const routeProjectId = computed(() => {
-  const value = route.query.projectId
-  return typeof value === 'string' ? value : ''
+  return projectIdFromParam(route.params.projectId)
 })
 
 const refreshing = ref(false)
 const isLayoutEditable = ref(false)
-const activeSpace = ref<DashboardSpace>('operations')
+const dashboardSpaces = computed(() => dashboardSpacesForTemplate(
+  selectedProject.value?.analysisTemplate ?? 'app',
+))
+const activeSpace = ref<DashboardSpaceKey>(dashboardSpaces.value[0]!.key)
 const dashboardLayout = ref<DashboardItem[]>([])
 const serverDashboards = ref<AdminDashboard[]>([])
 const dashboardSaving = ref(false)
+const layoutBeforeEditing = ref<DashboardItem[] | null>(null)
 
 // Filters & Params
 const filters = reactive({
@@ -657,7 +646,6 @@ const trends = ref<MetricsTrends | null>(null)
 const topEvents = ref<MetricsTopEvents | null>(null)
 const trafficTrends = ref<TrafficTrends | null>(null)
 const topPages = ref<TopPageItem[]>([])
-const trafficSummary = ref<TrafficSummary | null>(null)
 const productFunnel = ref<FunnelResponse | null>(null)
 const retention = ref<RetentionResponse | null>(null)
 const dashboardAnalyticsConfig = ref<DashboardAnalyticsConfig>({})
@@ -756,31 +744,9 @@ const requireProject = () => {
   return true
 }
 // --- 4. Layout Management ---
-const defaultLayouts: Record<DashboardSpace, DashboardItem[]> = {
-  operations: [
-    { x: 0, y: 0, w: 12, h: 4, i: 'overview_default', type: 'core.overview', minW: 6, minH: 3 },
-    { x: 0, y: 4, w: 8, h: 10, i: 'trends_default', type: 'core.trends', minW: 4, minH: 6 },
-    { x: 8, y: 4, w: 4, h: 10, i: 'topEvents_default', type: 'core.topEvents', minW: 3, minH: 6 },
-    { x: 0, y: 14, w: 6, h: 10, i: 'trafficTrends_default', type: 'core.trafficTrends', minW: 4, minH: 6 },
-    { x: 6, y: 14, w: 6, h: 10, i: 'rankings_default', type: 'core.topPages', minW: 4, minH: 6 },
-    { x: 0, y: 24, w: 12, h: 8, i: 'counters_default', type: 'core.counters', minW: 4, minH: 4 },
-  ],
-  technical: [
-    { x: 0, y: 0, w: 6, h: 12, i: 'events_default', type: 'core.events', minW: 4, minH: 8 },
-    { x: 6, y: 0, w: 6, h: 12, i: 'traffic_default', type: 'core.traffic', minW: 4, minH: 8 },
-    { x: 0, y: 12, w: 6, h: 10, i: 'devices_default', type: 'core.devices', minW: 4, minH: 6 },
-    { x: 6, y: 12, w: 6, h: 10, i: 'sessions_default', type: 'core.sessions', minW: 4, minH: 6 },
-  ],
-}
-
-const widgetTemplates: Record<DashboardSpace, DashboardItem[]> = {
-  operations: [
-    ...defaultLayouts.operations,
-    { x: 0, y: 0, w: 12, h: 10, i: 'productFunnel_template', type: 'core.productFunnel', minW: 6, minH: 6 },
-    { x: 0, y: 0, w: 6, h: 10, i: 'retention_template', type: 'core.retention', minW: 4, minH: 6 },
-  ],
-  technical: [...defaultLayouts.technical],
-}
+const activeSpaceDefinition = computed(() =>
+  dashboardSpaces.value.find((space) => space.key === activeSpace.value) ?? dashboardSpaces.value[0]!,
+)
 
 const widgetLabelKeys: Record<string, string> = {
   'core.overview': 'metrics.overview',
@@ -819,13 +785,27 @@ const removeWidget = (id: string) => {
 }
 
 const resetToDefaultLayout = () => {
-  dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[activeSpace.value]))
-  saveLayout()
+  dashboardLayout.value = cloneDashboardLayout(activeSpaceDefinition.value.defaultLayout)
+}
+
+const startLayoutEditing = () => {
+  if (isLayoutEditable.value) return
+  layoutBeforeEditing.value = JSON.parse(JSON.stringify(dashboardLayout.value))
+  isLayoutEditable.value = true
+}
+
+const cancelLayoutEditing = () => {
+  if (layoutBeforeEditing.value) {
+    dashboardLayout.value = JSON.parse(JSON.stringify(layoutBeforeEditing.value))
+    syncAnalyticsConfigFromLayout()
+  }
+  layoutBeforeEditing.value = null
+  isLayoutEditable.value = false
 }
 
 const availableWidgetTypes = computed(() => {
   const present = new Set(dashboardLayout.value.map((item) => resolvedWidgetType(item)))
-  const coreWidgets = widgetTemplates[activeSpace.value]
+  const coreWidgets = activeSpaceDefinition.value.widgetTemplates
     .filter((item) => item.type && !present.has(item.type))
     .map((item) => ({
       type: item.type as string,
@@ -839,14 +819,6 @@ const availableWidgetTypes = computed(() => {
     }))
   return [...coreWidgets, ...extensionWidgets]
 })
-const currentWidgetOptions = computed(() => dashboardLayout.value.map((item) => ({
-  type: resolvedWidgetType(item) || item.i,
-  label: getWidgetLabel(item),
-})))
-const registeredCustomWidgetCount = computed(() =>
-  getDashboardWidgetExtensions(activeSpace.value).length,
-)
-
 const appendExtensionWidget = (type: string) => {
   const extension = getDashboardWidgetExtension(type)
   if (!extension || !extension.spaces.includes(activeSpace.value)) return
@@ -875,7 +847,7 @@ const appendExtensionWidget = (type: string) => {
 
 const appendWidgetType = (type: string, config?: Record<string, unknown>) => {
   if (dashboardLayout.value.some((item) => resolvedWidgetType(item) === type)) return
-  const template = widgetTemplates[activeSpace.value].find((item) => item.type === type)
+  const template = activeSpaceDefinition.value.widgetTemplates.find((item) => item.type === type)
   if (!template) return
   const nextY = dashboardLayout.value.reduce(
     (bottom, item) => Math.max(bottom, item.y + item.h),
@@ -1038,11 +1010,6 @@ const confirmConfiguredWidget = () => {
   appendWidgetType(type, config)
 }
 
-const saveLayout = () => {
-  if (!filters.projectId || !layoutVisible.value) return
-  localStorage.setItem(layoutStorageKey(), JSON.stringify(dashboardLayout.value))
-}
-
 const applyServerDashboard = (dashboard: AdminDashboard) => {
   const widgets = dashboard.definition?.widgets
   if (!Array.isArray(widgets)) return false
@@ -1116,7 +1083,9 @@ const loadLayout = async () => {
   const generation = ++layoutLoadGeneration
   const projectId = filters.projectId
   const space = activeSpace.value
-  loadDashboardAnalyticsConfig(projectId)
+  const spaceDefinition = dashboardSpaces.value.find((item) => item.key === space)
+  if (!spaceDefinition) return
+  dashboardAnalyticsConfig.value = {}
   if (projectId) {
     try {
       const response = await getProjectDashboards(projectId)
@@ -1128,32 +1097,20 @@ const loadLayout = async () => {
         (item) => item.dashboardKey === space && item.isActive,
       )
       if (dashboard && applyServerDashboard(dashboard)) return
-    } catch {
+    } catch (error) {
       if (generation !== layoutLoadGeneration
         || filters.projectId !== projectId
         || activeSpace.value !== space) return
-      // An older backend may not have dashboard storage yet; keep the local fallback.
       serverDashboards.value = []
+      dashboardLayout.value = []
+      ElMessage.error(getErrorMessage(error, t('metrics.dashboardLoadFailed')))
+      return
     }
   }
   if (generation !== layoutLoadGeneration
     || filters.projectId !== projectId
     || activeSpace.value !== space) return
-  const saved = projectId ? localStorage.getItem(layoutStorageKey(projectId, space)) : null
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved)
-      if (Array.isArray(parsed)) {
-        dashboardLayout.value = parsed
-      } else {
-        dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[space]))
-      }
-    } catch {
-      dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[space]))
-    }
-  } else {
-    dashboardLayout.value = JSON.parse(JSON.stringify(defaultLayouts[space]))
-  }
+  dashboardLayout.value = cloneDashboardLayout(spaceDefinition.defaultLayout)
   syncAnalyticsConfigFromLayout()
 }
 
@@ -1182,7 +1139,7 @@ type ExtensionWidgetBinding = Readonly<{
 }>
 type ExtensionWidgetBindingCache = {
   type: string | null
-  space: DashboardSpace
+  space: DashboardSpaceKey
   sourceConfig: unknown
   binding?: ExtensionWidgetBinding
 }
@@ -1316,94 +1273,47 @@ const toServerDefinition = (): DashboardDefinition | null => {
 }
 
 const saveServerDashboard = async () => {
-  if (!filters.projectId) return
+  if (!filters.projectId) return false
   const projectId = filters.projectId
   const space = activeSpace.value
   const definition = toServerDefinition()
   if (!definition) {
     ElMessage.error(t('metrics.dashboardUnsupportedWidget'))
-    return
+    return false
   }
   const existing = serverDashboards.value.find((item) => item.dashboardKey === space)
+  const spaceDefinition = activeSpaceDefinition.value
   dashboardSaving.value = true
   try {
     const response = await upsertProjectDashboard(projectId, space, {
-      displayName: space === 'operations'
-        ? { 'zh-CN': '运营概况', en: 'Operations' }
-        : { 'zh-CN': '明细数据', en: 'Detailed Data' },
-      description: space === 'operations'
-        ? 'Project operations dashboard'
-        : 'Project technical details dashboard',
+      displayName: spaceDefinition.displayName,
+      description: spaceDefinition.description,
       schemaVersion: 1,
       definition,
       expectedRevision: existing?.revision ?? 0,
-      isDefault: space === 'operations',
+      isDefault: dashboardSpaces.value[0]?.key === space,
       isActive: true,
     })
-    if (filters.projectId !== projectId || activeSpace.value !== space) return
+    if (filters.projectId !== projectId || activeSpace.value !== space) return false
     const saved = response.data.data
     serverDashboards.value = [
       ...serverDashboards.value.filter((item) => item.dashboardKey !== saved.dashboardKey),
       saved,
     ]
-    saveLayout()
     ElMessage.success(t('metrics.dashboardSaved'))
+    return true
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('metrics.dashboardSaveFailed')))
+    return false
   } finally {
     dashboardSaving.value = false
   }
 }
 
-const layoutStorageKey = (
-  projectId = filters.projectId,
-  space: DashboardSpace = activeSpace.value,
-) => `analyticshub_dashboard_layout_v1_${encodeURIComponent(projectId)}_${space}`
-
-const analyticsConfigStorageKey = (projectId = filters.projectId) =>
-  `analyticshub_dashboard_analytics_v1_${encodeURIComponent(projectId)}`
-
-const loadDashboardAnalyticsConfig = (projectId = filters.projectId) => {
-  dashboardAnalyticsConfig.value = {}
-  if (!projectId || filters.projectId !== projectId) return
-  const raw = localStorage.getItem(analyticsConfigStorageKey(projectId))
-  if (!raw) return
-  try {
-    const candidate = JSON.parse(raw) as DashboardAnalyticsConfig
-    const isEventKey = (value: unknown): value is string =>
-      typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,100}$/.test(value.trim())
-    const isGroupByKey = (value: unknown): value is string =>
-      typeof value === 'string' && /^[A-Za-z0-9_.:-]{1,80}$/.test(value.trim())
-    const next: DashboardAnalyticsConfig = {}
-    if (candidate.funnel && Array.isArray(candidate.funnel.steps)) {
-      const steps = [...new Set(candidate.funnel.steps.filter(isEventKey).map(step => step.trim()))]
-      if (steps.length >= 2 && steps.length <= 12) {
-        next.funnel = {
-          steps,
-          groupBy: isGroupByKey(candidate.funnel.groupBy) ? candidate.funnel.groupBy.trim() : undefined,
-        }
-      }
-    }
-    if (candidate.retention
-      && isEventKey(candidate.retention.cohortEvent)
-      && isEventKey(candidate.retention.returnEvent)
-      && Array.isArray(candidate.retention.days)) {
-      const days = [...new Set(candidate.retention.days
-        .filter(day => Number.isInteger(day) && day >= 0 && day <= 90))]
-        .sort((left, right) => left - right)
-        .slice(0, 30)
-      if (days.length > 0) {
-        next.retention = {
-          cohortEvent: candidate.retention.cohortEvent.trim(),
-          returnEvent: candidate.retention.returnEvent.trim(),
-          days,
-        }
-      }
-    }
-    dashboardAnalyticsConfig.value = next
-  } catch {
-    dashboardAnalyticsConfig.value = {}
-  }
+const completeLayoutEditing = async () => {
+  if (!await saveServerDashboard()) return
+  layoutBeforeEditing.value = null
+  isLayoutEditable.value = false
 }
 
 // --- 5. Formatting & Computation ---
@@ -1446,15 +1356,6 @@ const overviewItems = computed(() => {
     [t('metrics.overviewItems.avgSessionDuration')]: formatDuration(overview.value.avgSessionDurationMs),
   }
 
-  // Add traffic PV/UV if available (usually for Website platform)
-  if (trafficSummary.value) {
-    return {
-      ...base,
-      [t('metrics.chart.pageViews')]: formatNumber(trafficSummary.value.pageViews),
-      [t('metrics.chart.visitors')]: formatNumber(trafficSummary.value.visitors),
-    }
-  }
-
   return base
 })
 
@@ -1476,14 +1377,10 @@ const loadOverview = async (context: ProjectRequestContext = captureProjectConte
   overviewLoading.value = true
   try {
     const params = cleanParams({ projectId: context.projectId, ...rangeParams(context.snapshot) })
-    const [overviewRes, trafficRes] = await Promise.all([
-      getMetricsOverview(params),
-      getTrafficSummary({ ...params, granularity: context.snapshot.granularity }),
-    ])
-    
+    const overviewRes = await getMetricsOverview(params)
+
     if (!isCurrentProjectContext(context)) return
     overview.value = overviewRes.data.data
-    trafficSummary.value = trafficRes.data.data
   } catch (error) {
     if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.overviewFailed')))
   } finally {
@@ -1938,7 +1835,6 @@ const clearProjectScopedState = () => {
   topEvents.value = null
   trafficTrends.value = null
   topPages.value = []
-  trafficSummary.value = null
   productFunnel.value = null
   retention.value = null
   semanticEventCatalog.value = []
@@ -1956,6 +1852,12 @@ const clearProjectScopedState = () => {
 // --- 8. Watchers & Lifecycle ---
 let workspaceGeneration = 0
 let bootstrapping = true
+
+const alignActiveSpaceToTemplate = () => {
+  if (dashboardSpaces.value.some((space) => space.key === activeSpace.value)) return false
+  activeSpace.value = dashboardSpaces.value[0]!.key
+  return true
+}
 
 const disposeWorkspaceCharts = () => {
   if (resizeObserver) {
@@ -1987,6 +1889,7 @@ const activateWorkspace = async (projectChanged: boolean) => {
 
   layoutVisible.value = false
   isLayoutEditable.value = false
+  layoutBeforeEditing.value = null
   dashboardLayout.value = []
   clearLoadingStates()
   disposeWorkspaceCharts()
@@ -1996,7 +1899,7 @@ const activateWorkspace = async (projectChanged: boolean) => {
   }
 
   if (projectId && routeProjectId.value !== projectId) {
-    await router.replace({ path: '/metrics', query: { projectId } })
+    await router.replace(projectRoute(projectId, 'dashboard'))
   }
   if (generation !== workspaceGeneration
     || projectId !== filters.projectId
@@ -2030,6 +1933,7 @@ watch(() => filters.projectId, () => {
   if (bootstrapping) return
   projectContext.selectProject(filters.projectId)
   resetProjectDetailFilters()
+  if (alignActiveSpaceToTemplate()) return
   void activateWorkspace(true)
 })
 
@@ -2046,8 +1950,6 @@ watch(routeProjectId, (projectId) => {
   }
 })
 
-watch(dashboardLayout, saveLayout, { deep: true })
-
 watch(trends, () => nextTick(updateBusinessTrendsChart))
 watch(trafficTrends, () => nextTick(updateTrafficTrendsChart))
 
@@ -2062,6 +1964,7 @@ onMounted(async () => {
   try {
     await projectContext.ensureLoaded(routeProjectId.value)
     filters.projectId = selectedProjectId.value
+    alignActiveSpaceToTemplate()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   }

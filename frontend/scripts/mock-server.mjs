@@ -12,9 +12,10 @@ const timestamp = (offsetMs = 0) => now + offsetMs
 
 const projects = [
   {
-    id: '1',
+    id: 1,
     projectId: 'demo_product',
     projectName: 'Demo Product',
+    analysisTemplate: 'app',
     dbHost: 'postgres',
     dbPort: 5432,
     dbName: 'demo_product',
@@ -24,9 +25,10 @@ const projects = [
     isActive: true,
   },
   {
-    id: '2',
+    id: 2,
     projectId: 'demo_marketing',
     projectName: 'Demo Marketing Site',
+    analysisTemplate: 'website',
     dbHost: 'postgres',
     dbPort: 5432,
     dbName: 'demo_marketing',
@@ -238,7 +240,7 @@ const handleApi = async (request, response, url) => {
   if (endpoint === '/admin/projects' && method === 'GET') return sendJson(response, api(projects))
   if (endpoint === '/admin/projects' && method === 'POST') {
     const body = await readJson(request)
-    const record = { ...body, id: String(Math.max(0, ...projects.map((item) => Number(item.id))) + 1) }
+    const record = { ...body, id: Math.max(0, ...projects.map((item) => Number(item.id))) + 1 }
     projects.push(record)
     semanticState.set(record.projectId, [])
     counters.set(record.projectId, [])
@@ -247,14 +249,14 @@ const handleApi = async (request, response, url) => {
   const projectMatch = endpoint.match(/^\/admin\/projects\/([^/]+)$/)
   if (projectMatch && method === 'PUT') {
     const id = decodeURIComponent(projectMatch[1])
-    const index = projects.findIndex((item) => item.id === id)
+    const index = projects.findIndex((item) => String(item.id) === id)
     if (index < 0) return sendJson(response, { ...api(null), success: false, error: { message: 'Project not found' } }, 404)
     projects[index] = { ...projects[index], ...await readJson(request), id }
     return sendJson(response, api(projects[index]))
   }
   if (projectMatch && method === 'DELETE') {
     const id = decodeURIComponent(projectMatch[1])
-    const index = projects.findIndex((item) => item.id === id)
+    const index = projects.findIndex((item) => String(item.id) === id)
     if (index >= 0) projects.splice(index, 1)
     return sendJson(response, api(null))
   }

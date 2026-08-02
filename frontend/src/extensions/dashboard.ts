@@ -1,10 +1,11 @@
 import type { Component } from 'vue'
 import type { Locale } from '@/i18n'
+import type { DashboardSpaceKey } from '@/features/dashboard/projectDashboardTemplate'
 import { dashboardWidgetExtensions } from './dashboardRegistry'
 
 export { dashboardWidgetExtensions } from './dashboardRegistry'
 
-export type DashboardExtensionSpace = 'operations' | 'technical'
+export type DashboardExtensionSpace = DashboardSpaceKey
 export type DashboardExtensionJsonValue =
   | string
   | number
@@ -73,7 +74,9 @@ export const defineDashboardWidgetExtension = <TConfig extends DashboardExtensio
 
 const extensionTypePattern = /^custom\.[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*$/
 const localePattern = /^(?:default|[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*)$/
-const validSpaces = new Set<DashboardExtensionSpace>(['operations', 'technical'])
+const validSpaces = new Set<DashboardExtensionSpace>([
+  'app', 'website', 'product', 'details', 'custom',
+])
 const maxConfigBytes = 256 * 1024
 const extensionByType = new Map<string, DashboardWidgetExtension>()
 

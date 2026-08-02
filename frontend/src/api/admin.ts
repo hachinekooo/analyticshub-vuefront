@@ -45,9 +45,10 @@ export interface ProjectInitResult {
 }
 
 export interface Project {
-  id: string
+  id: number
   projectId: string
   projectName: string
+  analysisTemplate: ProjectAnalysisTemplate
   dbHost: string
   dbPort: number
   dbName: string
@@ -61,9 +62,12 @@ export interface Project {
   healthLoading?: boolean
 }
 
+export type ProjectAnalysisTemplate = 'app' | 'website' | 'webapp' | 'blank'
+
 type ProjectPayload = {
   projectId?: string
   projectName?: string
+  analysisTemplate?: ProjectAnalysisTemplate
   dbHost?: string
   dbPort?: number
   dbName?: string
@@ -78,6 +82,7 @@ const buildProjectPayload = (data: Partial<Project>): ProjectPayload => {
   const payload: ProjectPayload = {
     projectId: data.projectId,
     projectName: data.projectName,
+    analysisTemplate: data.analysisTemplate,
     dbHost: data.dbHost,
     dbPort: data.dbPort,
     dbName: data.dbName,
@@ -103,18 +108,18 @@ export const createProject = (data: Partial<Project>) => {
   return request.post<ApiResponse<Project>>('/admin/projects', buildProjectPayload(data))
 }
 
-export const updateProject = (id: string, data: Partial<Project>) => {
+export const updateProject = (id: number, data: Partial<Project>) => {
   return request.put<ApiResponse<Project>>(`/admin/projects/${id}`, buildProjectPayload(data))
 }
 
-export const deleteProject = (id: string) => {
+export const deleteProject = (id: number) => {
   return request.delete<ApiResponse<null>>(`/admin/projects/${id}`)
 }
 
-export const checkProjectHealth = (id: string) => {
+export const checkProjectHealth = (id: number) => {
   return request.get<ApiResponse<ProjectHealth>>(`/admin/projects/${id}/health`)
 }
 
-export const initProjectDatabase = (id: string) => {
+export const initProjectDatabase = (id: number) => {
   return request.post<ApiResponse<ProjectInitResult>>(`/admin/projects/${id}/init`)
 }

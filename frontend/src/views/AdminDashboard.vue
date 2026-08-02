@@ -1,22 +1,10 @@
 <template>
   <div class="admin-container">
-    <PageHeader :title="t('dashboard.title')" :subtitle="t('dashboard.subtitle')">
-      <template #actions>
-        <el-button type="primary" size="large" @click="showAddDialog" class="add-btn">
-          <el-icon class="el-icon--left"><Plus /></el-icon>
-          {{ t('buttons.addProject') }}
-        </el-button>
-      </template>
-    </PageHeader>
+    <PageHeader :title="t('dashboard.title')" :subtitle="t('dashboard.subtitle')" />
 
     <div class="content-card">
       <div v-if="loading" class="loading-state">
         <el-icon class="is-loading" :size="50"><Loading /></el-icon>
-      </div>
-
-      <div v-else-if="projects.length === 0" class="empty-state">
-        <el-icon :size="64"><FolderOpened /></el-icon>
-        <p>{{ t('dashboard.empty') }}</p>
       </div>
 
       <div v-else class="project-grid">
@@ -41,6 +29,9 @@
             <div>
               <el-tag :type="project.isActive ? 'success' : 'info'" size="large" effect="light">
                 {{ project.isActive ? t('status.active') : t('status.inactive') }}
+              </el-tag>
+              <el-tag class="template-tag" size="small" effect="plain">
+                {{ t(`projectTemplates.${project.analysisTemplate}`) }}
               </el-tag>
             </div>
           </div>
@@ -98,93 +89,20 @@
             <el-icon v-if="project.isActive" class="card-footer-icon"><ArrowRight /></el-icon>
           </div>
         </div>
+        <button type="button" class="new-project-card" @click="showAddDialog">
+          <el-icon :size="24"><Plus /></el-icon>
+          <strong>{{ t('buttons.addProject') }}</strong>
+          <span>{{ t('dashboard.newProjectHint') }}</span>
+        </button>
       </div>
     </div>
 
-    <!-- Add/Edit Dialog -->
-    <el-dialog
+    <ProjectFormDialog
       v-model="dialogVisible"
-      :title="isEdit ? t('dialogs.editProject') : t('dialogs.addProject')"
-      width="600px"
-      custom-class="project-dialog"
-    >
-      <el-form :model="form" label-position="top" label-width="120px">
-        <el-row :gutter="20">
-          <el-col :span="12">
-             <el-form-item :label="t('form.projectId')">
-              <el-input v-model="form.projectId" :disabled="isEdit" :placeholder="t('form.placeholders.projectId')" />
-            </el-form-item>
-          </el-col>
-           <el-col :span="12">
-            <el-form-item :label="t('form.projectName')">
-              <el-input v-model="form.projectName" :placeholder="t('form.placeholders.projectName')" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-       
-        <el-row :gutter="20">
-          <el-col :span="16">
-            <el-form-item :label="t('form.dbHost')">
-              <el-input v-model="form.dbHost" :placeholder="t('form.placeholders.dbHost')" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item :label="t('form.port')">
-              <el-input-number v-model="form.dbPort" :min="1" :max="65535" style="width: 100%" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="20">
-          <el-col :span="12">
-             <el-form-item :label="t('form.dbName')">
-              <el-input v-model="form.dbName" :placeholder="t('form.placeholders.dbName')" />
-            </el-form-item>
-          </el-col>
-           <el-col :span="12">
-            <el-form-item :label="t('form.dbSchema')">
-              <el-input v-model="form.dbSchema" :placeholder="t('form.placeholders.dbSchema')" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="20">
-           <el-col :span="12">
-            <el-form-item :label="t('form.tablePrefix')">
-              <el-input v-model="form.tablePrefix" :placeholder="t('form.placeholders.tablePrefix')" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item :label="t('form.username')">
-              <el-input v-model="form.dbUser" :placeholder="t('form.placeholders.username')" />
-            </el-form-item>
-          </el-col>
-           <el-col :span="12">
-            <el-form-item :label="t('form.password')">
-              <el-input v-model="form.dbPassword" type="password" show-password
-                :placeholder="isEdit ? t('form.placeholders.passwordEdit') : t('form.placeholders.password')" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item :label="t('form.status')">
-          <el-switch
-            v-model="form.isActive"
-            :active-text="t('status.active')"
-            :inactive-text="t('status.inactive')"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="dialogVisible = false">{{ t('buttons.cancel') }}</el-button>
-          <el-button type="primary" @click="saveProject">{{ t('buttons.save') }}</el-button>
-        </span>
-      </template>
-    </el-dialog>
+      :project="editingProject"
+      :saving="saving"
+      @submit="saveProject"
+    />
   </div>
 </template>
 
@@ -193,9 +111,11 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
+import ProjectFormDialog from '@/components/projects/ProjectFormDialog.vue'
 import { useI18n } from '@/i18n'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import { projectRoute } from '@/utils/projectRoutes'
 import { 
   createProject, 
   updateProject, 
@@ -208,7 +128,8 @@ import {
 const projects = ref<Project[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
-const isEdit = ref(false)
+const saving = ref(false)
+const editingProject = ref<Project | null>(null)
 
 const router = useRouter()
 const projectContext = useProjectContextStore()
@@ -216,23 +137,8 @@ const { t } = useI18n()
 
 const openProjectMetrics = (project: Project) => {
   if (!project.isActive) return
-  router.push({ path: '/metrics', query: { projectId: project.projectId } })
+  router.push(projectRoute(project.projectId))
 }
-
-const getEmptyForm = (): Partial<Project> => ({
-  projectId: '',
-  projectName: '',
-  dbHost: 'localhost',
-  dbPort: 5432,
-  dbName: '',
-  dbSchema: 'analytics',
-  dbUser: '',
-  dbPassword: '',
-  tablePrefix: 'analytics_',
-  isActive: true,
-})
-
-const form = ref(getEmptyForm())
 
 const loadProjects = async () => {
   loading.value = true
@@ -277,41 +183,44 @@ const handleCheckHealth = async (project: Project) => {
 }
 
 const showAddDialog = () => {
-  isEdit.value = false
-  form.value = getEmptyForm()
+  editingProject.value = null
   dialogVisible.value = true
 }
 
 const handleEditProject = (project: Project) => {
-  isEdit.value = true
-  // Leave password empty so the backend can keep it unchanged.
-  form.value = { ...project, dbPassword: '' }
+  editingProject.value = project
   dialogVisible.value = true
 }
 
-const saveProject = async () => {
+const saveProject = async (payload: Partial<Project>) => {
+  saving.value = true
   let preferredProjectId = projectContext.selectedProjectId
+  let createdProjectId = ''
   try {
-    if (isEdit.value) {
-      if (form.value.id) {
-        await updateProject(form.value.id, form.value)
-        ElMessage.success(t('messages.projectUpdated'))
-      }
+    if (editingProject.value) {
+      await updateProject(editingProject.value.id, payload)
+      preferredProjectId = editingProject.value.projectId
+      ElMessage.success(t('messages.projectUpdated'))
     } else {
-      await createProject(form.value)
-      preferredProjectId = form.value.projectId || preferredProjectId
+      const response = await createProject(payload)
+      createdProjectId = response.data.data.projectId
+      preferredProjectId = createdProjectId
       ElMessage.success(t('messages.projectCreated'))
     }
     dialogVisible.value = false
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.saveProjectFailed')))
+    saving.value = false
     return
   }
   try {
     await projectContext.reload(preferredProjectId)
     await loadProjects()
+    if (createdProjectId) await router.push(projectRoute(createdProjectId))
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
+  } finally {
+    saving.value = false
   }
 }
 
@@ -370,35 +279,28 @@ onMounted(() => {
 }
 
 .content-card {
-  background: white;
-  border-radius: 24px;
-  padding: 32px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+  background: transparent;
 }
 
-.loading-state, .empty-state {
+.loading-state {
   text-align: center;
   padding: 80px 0;
   color: #86868b;
 }
 
-.empty-state p {
-  margin-top: 16px;
-  font-size: 17px;
-}
-
 .project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 14px;
 }
 
 .project-card {
+  min-height: 210px;
   background: #ffffff;
-  border-radius: 18px;
-  padding: 24px;
+  border-radius: 12px;
+  padding: 18px;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .project-card.clickable {
@@ -407,10 +309,30 @@ onMounted(() => {
 .project-card.disabled { opacity: 0.72; }
 
 .project-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
-  border-color: rgba(0, 0, 0, 0.0);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.06);
+  border-color: #8fc7ff;
 }
+
+.template-tag { display: flex; margin-top: 6px; }
+
+.new-project-card {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  min-height: 210px;
+  gap: 7px;
+  padding: 22px;
+  color: #0066cc;
+  text-align: center;
+  border: 1.5px dashed #8bbce8;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+.new-project-card:hover { border-color: #0071e3; background: rgba(255, 255, 255, 0.5); }
+.new-project-card strong { font-size: 16px; }
+.new-project-card span { color: #6e6e73; font-size: 12px; }
 
 .project-header {
   display: flex;
@@ -499,13 +421,6 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 24px;
-}
-
-.add-btn {
-  font-weight: 500;
-  border-radius: 99px;
-  padding-left: 24px;
-  padding-right: 24px;
 }
 
 :deep(.el-button) {

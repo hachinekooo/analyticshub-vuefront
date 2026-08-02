@@ -305,11 +305,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import { useI18n } from '@/i18n'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
+import { projectIdFromParam } from '@/utils/projectRoutes'
 import { isFinalPrivacyStatus, privacyPrimaryAction } from '@/utils/privacyWorkflow'
 import {
   getPrivacyRequestDetail,
@@ -329,8 +331,10 @@ import {
 } from '@/api/privacy'
 
 const { t } = useI18n()
+const route = useRoute()
 const projectContext = useProjectContextStore()
 const { selectedProjectId: contextProjectId } = storeToRefs(projectContext)
+const routeProjectId = computed(() => projectIdFromParam(route.params.projectId))
 
 const privacyStatuses: PrivacyRequestStatus[] = ['SUBMITTED', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELLED']
 const loading = ref(false)
@@ -762,16 +766,17 @@ const formatJsonBlock = (value: unknown) => {
   }
 }
 
-watch(contextProjectId, async (projectId) => {
+watch(routeProjectId, async (projectId) => {
   if (!projectId || projectId === filters.projectId) return
+  projectContext.selectProject(projectId)
   filters.projectId = projectId
   await handleProjectChange()
 })
 
 onMounted(async () => {
   try {
-    await projectContext.ensureLoaded()
-    filters.projectId = contextProjectId.value
+    await projectContext.ensureLoaded(routeProjectId.value)
+    filters.projectId = routeProjectId.value || contextProjectId.value
     if (filters.projectId) loadRequests()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
