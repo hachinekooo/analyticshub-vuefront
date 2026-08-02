@@ -9,11 +9,13 @@
     </div>
 
     <el-table :data="visibleCounters" size="small" style="width: 100%">
-      <el-table-column :label="t('tables.key')" min-width="160" show-overflow-tooltip>
+      <el-table-column :label="t('metrics.counterFields.displayName')" min-width="170" show-overflow-tooltip>
         <template #default="{ row }">
-          <div>{{ localizedText(row.displayName) || row.key }}</div>
-          <code v-if="localizedText(row.displayName)">{{ row.key }}</code>
+          {{ localizedText(row.displayName) || '-' }}
         </template>
+      </el-table-column>
+      <el-table-column prop="key" :label="t('metrics.counterFields.key')" min-width="190" show-overflow-tooltip>
+        <template #default="{ row }"><code>{{ row.key }}</code></template>
       </el-table-column>
       <el-table-column :label="t('tables.value')" min-width="120">
         <template #default="{ row }">
@@ -23,10 +25,10 @@
       <el-table-column :label="t('tables.lastRebuiltAt')" min-width="170">
         <template #default="{ row }">
           {{ row.lastRebuiltAt ? formatTimestamp(row.lastRebuiltAt) : t('metrics.neverRebuilt') }}
-          <span v-if="row.lastRebuildEventCount !== null">
-            ({{ row.lastRebuildEventCount }})
-          </span>
         </template>
+      </el-table-column>
+      <el-table-column :label="t('metrics.counterFields.rebuildEventCount')" min-width="120">
+        <template #default="{ row }">{{ row.lastRebuildEventCount ?? '-' }}</template>
       </el-table-column>
       <el-table-column :label="t('buttons.actions')" min-width="170">
         <template #default="{ row }">
