@@ -9,15 +9,6 @@
       </template>
     </PageHeader>
 
-    <el-alert
-      class="mapping-guide"
-      type="info"
-      :closable="false"
-      show-icon
-      :title="t('semantics.mappingGuide.title')"
-      :description="t('semantics.mappingGuide.description')"
-    />
-
     <div class="content-card toolbar">
       <el-input
         v-model="searchText"
@@ -27,67 +18,60 @@
       >
         <template #prefix><el-icon><Search /></el-icon></template>
       </el-input>
-      <el-select v-model="catalogFilter" class="mapping-filter">
-        <el-option :label="t('semantics.filters.all')" value="all" />
-        <el-option :label="t('semantics.filters.unmapped')" value="unmapped" />
-        <el-option :label="t('semantics.filters.mapped')" value="mapped" />
-      </el-select>
       <div class="summary-tags">
+        <el-tag type="info" effect="plain">
+          {{ t('semantics.summary.definitions', { count: definitions.length }) }}
+        </el-tag>
         <el-tag effect="plain">{{ t('semantics.summary.raw', { count: catalog.length }) }}</el-tag>
         <el-tag type="success" effect="plain">
           {{ t('semantics.summary.mapped', { count: mappedCount }) }}
         </el-tag>
-        <el-tag type="info" effect="plain">
-          {{ t('semantics.summary.definitions', { count: definitions.length }) }}
+        <el-tag :type="unmappedCount > 0 ? 'warning' : 'info'" effect="plain">
+          {{ t('semantics.summary.unmapped', { count: unmappedCount }) }}
         </el-tag>
       </div>
+      <el-badge :value="unmappedCount" :show-zero="false">
+        <el-button plain @click="catalogVisible = !catalogVisible">
+          {{ catalogVisible ? t('semantics.actions.hideCatalog') : t('semantics.actions.showCatalog') }}
+        </el-button>
+      </el-badge>
       <el-button :aria-label="t('buttons.refresh')" :loading="loading" circle plain @click="refreshAll">
         <el-icon><Refresh /></el-icon>
       </el-button>
     </div>
 
-    <div class="two-column-grid" v-loading="loading">
-      <div class="content-card">
-        <div class="section-header">
-          <div>
-            <h2>{{ t('semantics.catalog.title') }}</h2>
-            <p>{{ t('semantics.catalog.help') }}</p>
-          </div>
-        </div>
-        <el-table :data="filteredCatalog" size="small" height="620">
-          <el-table-column prop="rawKey" :label="t('semantics.fields.rawKey')" min-width="170" show-overflow-tooltip />
-          <el-table-column :label="t('semantics.fields.meaning')" min-width="170">
-            <template #default="{ row }">
-              <template v-if="row.mapped">
-                <div class="primary-cell">{{ localizedName(row.displayName) }}</div>
-                <code>{{ row.semanticKey }}</code>
-              </template>
-              <el-tag v-else type="warning" size="small">{{ t('semantics.unmapped') }}</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="eventCount" :label="t('tables.count')" width="90" />
-          <el-table-column prop="lastSeenAt" :label="t('semantics.fields.lastSeen')" min-width="165">
-            <template #default="{ row }">{{ formatDateTime(row.lastSeenAt) }}</template>
-          </el-table-column>
-          <el-table-column :label="t('buttons.actions')" width="100" fixed="right">
-            <template #default="{ row }">
-              <el-button size="small" link type="primary" @click="openFromRaw(row.rawKey)">
-                {{ row.mapped ? t('buttons.edit') : t('semantics.actions.map') }}
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-
-      <div class="content-card">
+    <div v-loading="loading">
+      <div class="content-card definitions-card">
         <div class="section-header">
           <div>
             <h2>{{ t('semantics.definitions.title') }}</h2>
             <p>{{ t('semantics.definitions.help') }}</p>
           </div>
         </div>
-        <el-table :data="filteredDefinitions" size="small" height="620">
-          <el-table-column :label="t('semantics.fields.meaning')" min-width="180">
+        <el-table :data="filteredDefinitions" size="small" max-height="620">
+          <el-table-column type="expand" width="46">
+            <template #default="{ row }">
+              <div class="definition-alias-detail">
+                <div class="alias-detail-heading">
+                  <strong>{{ t('semantics.fields.aliases') }}</strong>
+                  <span>{{ t('semantics.mappingGuide.description') }}</span>
+                </div>
+                <el-empty
+                  v-if="row.aliases.length === 0"
+                  :description="t('semantics.definitions.noAliases')"
+                  :image-size="42"
+                />
+                <div v-else class="alias-detail-list">
+                  <div v-for="alias in row.aliases" :key="alias" class="alias-detail-row">
+                    <code>{{ alias }}</code>
+                    <span>{{ t('tables.count') }}：{{ rawEventCount(alias) }}</span>
+                    <span>{{ t('semantics.fields.lastSeen') }}：{{ rawLastSeenAt(alias) }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column :label="t('semantics.fields.meaning')" min-width="260">
             <template #default="{ row }">
               <div class="primary-cell">{{ localizedName(row.displayName) }}</div>
               <code>{{ row.semanticKey }}</code>
@@ -99,16 +83,11 @@
           <el-table-column prop="category" :label="t('semantics.fields.category')" min-width="110">
             <template #default="{ row }">{{ row.category || '-' }}</template>
           </el-table-column>
-          <el-table-column :label="t('semantics.fields.aliases')" min-width="210">
+          <el-table-column :label="t('semantics.fields.aliases')" min-width="150">
             <template #default="{ row }">
-              <div class="alias-list">
-                <el-tag v-for="alias in row.aliases.slice(0, 4)" :key="alias" size="small" effect="plain">
-                  {{ alias }}
-                </el-tag>
-                <el-tag v-if="row.aliases.length > 4" size="small" type="info">
-                  +{{ row.aliases.length - 4 }}
-                </el-tag>
-              </div>
+              <el-tag size="small" effect="plain">
+                {{ t('semantics.definitions.aliasCount', { count: row.aliases.length }) }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column :label="t('tables.status')" width="90">
@@ -136,6 +115,45 @@
           </el-table-column>
         </el-table>
       </div>
+
+      <el-collapse-transition>
+        <div v-show="catalogVisible" class="content-card catalog-panel">
+          <div class="section-header catalog-header">
+            <div>
+              <h2>{{ t('semantics.catalog.title') }}</h2>
+              <p>{{ t('semantics.catalog.help') }}</p>
+            </div>
+            <el-select v-model="catalogFilter" class="mapping-filter">
+              <el-option :label="t('semantics.filters.unmapped')" value="unmapped" />
+              <el-option :label="t('semantics.filters.all')" value="all" />
+              <el-option :label="t('semantics.filters.mapped')" value="mapped" />
+            </el-select>
+          </div>
+          <el-table :data="filteredCatalog" size="small" max-height="440">
+            <el-table-column prop="rawKey" :label="t('semantics.fields.rawKey')" min-width="190" show-overflow-tooltip />
+            <el-table-column :label="t('semantics.fields.meaning')" min-width="220">
+              <template #default="{ row }">
+                <template v-if="row.mapped">
+                  <div class="primary-cell">{{ localizedName(row.displayName) }}</div>
+                  <code>{{ row.semanticKey }}</code>
+                </template>
+                <el-tag v-else type="warning" size="small">{{ t('semantics.unmapped') }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="eventCount" :label="t('tables.count')" width="110" />
+            <el-table-column prop="lastSeenAt" :label="t('semantics.fields.lastSeen')" min-width="180">
+              <template #default="{ row }">{{ formatDateTime(row.lastSeenAt) }}</template>
+            </el-table-column>
+            <el-table-column :label="t('buttons.actions')" width="110" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" link type="primary" @click="openFromRaw(row.rawKey)">
+                  {{ row.mapped ? t('buttons.edit') : t('semantics.actions.map') }}
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-collapse-transition>
     </div>
 
     <el-dialog
@@ -250,7 +268,8 @@ const projectId = ref('')
 const catalog = ref<EventCatalogEntry[]>([])
 const definitions = ref<SemanticDefinition[]>([])
 const searchText = ref('')
-const catalogFilter = ref<'all' | 'mapped' | 'unmapped'>('all')
+const catalogFilter = ref<'all' | 'mapped' | 'unmapped'>('unmapped')
+const catalogVisible = ref(false)
 const loading = ref(false)
 const saving = ref(false)
 const dialogVisible = ref(false)
@@ -271,6 +290,8 @@ const form = reactive({
 })
 
 const mappedCount = computed(() => catalog.value.filter((item) => item.mapped).length)
+const unmappedCount = computed(() => catalog.value.length - mappedCount.value)
+const catalogByRawKey = computed(() => new Map(catalog.value.map((item) => [item.rawKey, item])))
 const activeDefinitions = computed(() => definitions.value.filter((item) => item.isActive))
 const normalizedSearch = computed(() => searchText.value.trim().toLowerCase())
 const filteredCatalog = computed(() => catalog.value.filter((item) => {
@@ -300,6 +321,12 @@ const localizedName = (names: Record<string, string> | null) => {
 const formatDateTime = (value: string) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
+const rawEventCount = (rawKey: string) => catalogByRawKey.value.get(rawKey)?.eventCount ?? 0
+const rawLastSeenAt = (rawKey: string) => {
+  const lastSeenAt = catalogByRawKey.value.get(rawKey)?.lastSeenAt
+  return lastSeenAt ? formatDateTime(lastSeenAt) : '-'
 }
 
 const refreshAll = async () => {
@@ -503,22 +530,28 @@ onMounted(async () => {
 .content-card { background: rgba(255, 255, 255, 0.88); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 18px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.04); }
 .section-header p { margin: 8px 0 0; color: #86868b; font-size: 14px; }
 .toolbar, .summary-tags { display: flex; align-items: center; gap: 12px; }
-.mapping-guide { margin-bottom: 18px; }
 .mapping-form { margin-top: 18px; }
 .toolbar { padding: 16px 20px; margin-bottom: 20px; }
 .dictionary-search { width: min(360px, 35vw); }
 .mapping-filter { width: 150px; }
 .summary-tags { flex: 1; }
-.two-column-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: 20px; }
 .content-card { padding: 20px; min-width: 0; }
 .section-header { min-height: 64px; }
 .section-header h2 { margin: 0; font-size: 20px; }
 .primary-cell { font-weight: 600; margin-bottom: 4px; }
 code { color: #5f6368; font-size: 12px; }
-.alias-list { display: flex; gap: 5px; flex-wrap: wrap; }
+.catalog-panel { margin-top: 20px; }
+.catalog-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.definition-alias-detail { padding: 14px 52px 18px; background: #fafafa; }
+.alias-detail-heading { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.alias-detail-heading span { color: #86868b; font-size: 12px; }
+.alias-detail-list { display: grid; gap: 8px; }
+.alias-detail-row { display: grid; grid-template-columns: minmax(180px, 1fr) 140px 240px; gap: 16px; align-items: center; padding: 9px 12px; background: white; border: 1px solid var(--el-border-color-lighter); border-radius: 8px; }
+.alias-detail-row span { color: var(--el-text-color-secondary); font-size: 12px; }
 @media (max-width: 1100px) {
-  .two-column-grid { grid-template-columns: 1fr; }
   .toolbar { align-items: flex-start; flex-wrap: wrap; }
   .dictionary-search { width: 100%; }
+  .summary-tags { flex-basis: 100%; flex-wrap: wrap; }
+  .alias-detail-row { grid-template-columns: 1fr; gap: 5px; }
 }
 </style>

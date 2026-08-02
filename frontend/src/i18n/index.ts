@@ -395,8 +395,8 @@ const messages = {
       pageSubtitle: 'Manage durable cumulative business totals and their event-driven rules.',
     },
     semantics: {
-      title: 'Event Dictionary & Key Mapping',
-      subtitle: 'Map changing raw event keys to stable, project-specific business meanings',
+      title: 'Metric Dictionary',
+      subtitle: 'Manage stable business meanings; inspect raw event keys only when mapping or troubleshooting',
       unmapped: 'Unmapped',
       origin: { official: 'Official', custom: 'Custom' },
       searchPlaceholder: 'Search raw keys, meanings, aliases, or categories',
@@ -412,6 +412,7 @@ const messages = {
       summary: {
         raw: '{count} raw events',
         mapped: '{count} mapped',
+        unmapped: '{count} unmapped',
         definitions: '{count} meanings',
       },
       catalog: {
@@ -421,6 +422,8 @@ const messages = {
       definitions: {
         title: 'Business Meanings',
         help: 'Multiple historical or current raw keys can point to one stable meaning.',
+        aliasCount: '{count} raw keys',
+        noAliases: 'No raw event keys are mapped yet',
       },
       fields: {
         rawKey: 'Raw Key',
@@ -436,6 +439,8 @@ const messages = {
       actions: {
         create: 'Add Meaning',
         map: 'Map',
+        showCatalog: 'Raw Event Catalog',
+        hideCatalog: 'Hide Raw Events',
       },
       dialog: {
         create: 'Add Semantic Meaning',
@@ -954,8 +959,8 @@ const messages = {
       pageSubtitle: '管理长期累计的业务数字及其事件自动递增规则。',
     },
     semantics: {
-      title: '事件字典与 Key 映射',
-      subtitle: '把会变化的原始埋点 Key 映射成稳定、项目专属的业务含义',
+      title: '指标字典',
+      subtitle: '以稳定的业务含义为主，需要建立映射或排查问题时再查看原始埋点',
       unmapped: '未映射',
       origin: { official: '官方', custom: '自定义' },
       searchPlaceholder: '搜索原始 Key、业务含义、别名或分类',
@@ -971,6 +976,7 @@ const messages = {
       summary: {
         raw: '{count} 个原始事件',
         mapped: '{count} 个已映射',
+        unmapped: '{count} 个待映射',
         definitions: '{count} 个业务含义',
       },
       catalog: {
@@ -980,6 +986,8 @@ const messages = {
       definitions: {
         title: '业务含义',
         help: '调整埋点命名后，新旧多个 Key 可以继续指向同一个稳定含义。',
+        aliasCount: '关联 {count} 个原始 Key',
+        noAliases: '暂未关联原始事件 Key',
       },
       fields: {
         rawKey: '原始 Key',
@@ -995,6 +1003,8 @@ const messages = {
       actions: {
         create: '新增业务含义',
         map: '建立映射',
+        showCatalog: '原始事件目录',
+        hideCatalog: '收起原始事件',
       },
       dialog: {
         create: '新增语义映射',
