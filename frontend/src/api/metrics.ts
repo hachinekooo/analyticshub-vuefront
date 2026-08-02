@@ -129,7 +129,12 @@ export type CounterItem = {
   updatedAt: string
   lastRebuiltAt: string | null
   lastRebuildEventCount: number | null
+  rebuildOffset: number
+  historyMode: CounterHistoryMode
+  eventCountStartAt: string | null
 }
+
+export type CounterHistoryMode = 'INCLUDE_EXISTING' | 'START_FROM_NOW'
 
 export type CounterUpsertPayload = {
   value?: number
@@ -139,6 +144,8 @@ export type CounterUpsertPayload = {
   clearEventTrigger?: boolean
   isPublic?: boolean
   description?: string
+  rebuildOffset?: number
+  historyMode?: CounterHistoryMode
 }
 
 export type PublicCounterItem = {
