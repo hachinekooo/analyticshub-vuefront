@@ -34,8 +34,10 @@ const appLayout: readonly DashboardLayoutItem[] = [
 ]
 
 const websiteLayout: readonly DashboardLayoutItem[] = [
-  { x: 0, y: 0, w: 7, h: 10, i: 'trafficTrends_default', type: 'core.trafficTrends', minW: 4, minH: 6 },
-  { x: 7, y: 0, w: 5, h: 10, i: 'rankings_default', type: 'core.topPages', minW: 4, minH: 6 },
+  { x: 0, y: 0, w: 12, h: 5, i: 'trafficOverview_default', type: 'core.trafficOverview', minW: 6, minH: 4 },
+  { x: 0, y: 5, w: 7, h: 10, i: 'trafficTrends_default', type: 'core.trafficTrends', minW: 4, minH: 6 },
+  { x: 7, y: 5, w: 5, h: 10, i: 'rankings_default', type: 'core.topPages', minW: 4, minH: 6 },
+  { x: 0, y: 15, w: 12, h: 8, i: 'referrers_default', type: 'core.topReferrers', minW: 4, minH: 6 },
 ]
 
 const appDetailsLayout: readonly DashboardLayoutItem[] = [
@@ -50,8 +52,7 @@ const websiteDetailsLayout: readonly DashboardLayoutItem[] = [
 
 const webAppLayout: readonly DashboardLayoutItem[] = [
   ...appLayout,
-  { ...websiteLayout[0]!, x: 0, y: 14, i: 'trafficTrends_default' },
-  { ...websiteLayout[1]!, x: 7, y: 14, i: 'rankings_default' },
+  ...websiteLayout.map((item) => ({ ...item, y: item.y + 14 })),
 ]
 
 const webAppDetailsLayout: readonly DashboardLayoutItem[] = [

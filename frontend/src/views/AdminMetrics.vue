@@ -161,6 +161,20 @@
                 </div>
 
                 <!-- Traffic Trends Widget -->
+                <div v-else-if="isWidgetType(item, 'core.trafficOverview')" class="widget-content" v-loading="trafficSummaryLoading">
+                  <div v-if="hasCustomWidgetTitle(item)" class="widget-header">
+                    <span>{{ getWidgetLabel(item) }}</span>
+                  </div>
+                  <div v-if="trafficSummary" class="overview-grid-compact traffic-overview-grid">
+                    <div v-for="(val, label) in trafficOverviewItems" :key="label" class="overview-mini-card">
+                      <p class="mini-label">{{ label }}</p>
+                      <p class="mini-value">{{ val }}</p>
+                    </div>
+                  </div>
+                  <el-empty v-else :description="t('metrics.noData')" :image-size="60" />
+                </div>
+
+                <!-- Traffic Trends Widget -->
                 <div v-else-if="isWidgetType(item, 'core.trafficTrends')" class="widget-content" v-loading="trafficTrendsLoading">
                    <div class="widget-header">
                       <span>{{ getWidgetLabel(item) }}</span>
@@ -169,7 +183,7 @@
                 </div>
                 
                 <!-- Rankings Widget -->
-                 <div v-else-if="isWidgetType(item, 'core.topPages')" class="widget-content">
+                <div v-else-if="isWidgetType(item, 'core.topPages')" class="widget-content" v-loading="topPagesLoading">
                    <div class="widget-header">
                       <span>{{ getWidgetLabel(item) }}</span>
                    </div>
@@ -177,6 +191,18 @@
                       <el-table-column prop="key" :label="t('tables.page')" min-width="120" show-overflow-tooltip />
                       <el-table-column prop="count" :label="t('tables.count')" min-width="120" />
                    </el-table>
+                </div>
+
+                <div v-else-if="isWidgetType(item, 'core.topReferrers')" class="widget-content" v-loading="topReferrersLoading">
+                  <div class="widget-header">
+                    <span>{{ getWidgetLabel(item) }}</span>
+                  </div>
+                  <el-table :data="topReferrers" size="small" style="width: 100%">
+                    <el-table-column :label="t('tables.referrer')" min-width="180" show-overflow-tooltip>
+                      <template #default="{ row }">{{ row.key || t('metrics.directTraffic') }}</template>
+                    </el-table-column>
+                    <el-table-column prop="count" :label="t('tables.count')" min-width="120" />
+                  </el-table>
                 </div>
 
                 <!-- Counters Widget -->
@@ -486,8 +512,10 @@ import {
   getSessions,
   getTopEvents,
   getTrafficMetrics,
+  getTrafficSummary,
   getTrafficTrends,
   getTopPages,
+  getTopReferrers,
   type MetricsOverview,
   type MetricsTopEvents,
   type MetricsTrends,
@@ -496,10 +524,12 @@ import {
   type EventRecord,
   type SessionRecord,
   type TrafficMetricRecord,
+  type TrafficSummary,
   type MetricsGranularity,
   type TrafficGranularity,
   type TrafficTrends,
   type TopPageItem,
+  type TopReferrerItem,
   getProductFunnel,
   getProductRetention,
   type FunnelResponse,
@@ -637,7 +667,9 @@ const overview = ref<MetricsOverview | null>(null)
 const trends = ref<MetricsTrends | null>(null)
 const topEvents = ref<MetricsTopEvents | null>(null)
 const trafficTrends = ref<TrafficTrends | null>(null)
+const trafficSummary = ref<TrafficSummary | null>(null)
 const topPages = ref<TopPageItem[]>([])
+const topReferrers = ref<TopReferrerItem[]>([])
 const productFunnel = ref<FunnelResponse | null>(null)
 const retention = ref<RetentionResponse | null>(null)
 const dashboardAnalyticsConfig = ref<DashboardAnalyticsConfig>({})
@@ -682,7 +714,9 @@ const devicesLoading = ref(false)
 const sessionsLoading = ref(false)
 const trafficLoading = ref(false)
 const trafficTrendsLoading = ref(false)
+const trafficSummaryLoading = ref(false)
 const topPagesLoading = ref(false)
+const topReferrersLoading = ref(false)
 const productFunnelLoading = ref(false)
 const retentionLoading = ref(false)
 
@@ -749,8 +783,10 @@ const widgetLabelKeys: Record<string, string> = {
   'core.topEvents': 'metrics.topEvents',
   'core.productFunnel': 'metrics.productFunnel',
   'core.retention': 'metrics.retention',
+  'core.trafficOverview': 'metrics.trafficOverview',
   'core.trafficTrends': 'metrics.trafficTrends',
   'core.topPages': 'metrics.topPages',
+  'core.topReferrers': 'metrics.topReferrers',
   'core.counters': 'metrics.counters',
   'core.events': 'metrics.events',
   'core.devices': 'metrics.devices',
@@ -1110,10 +1146,12 @@ const loadLayout = async () => {
 }
 
 const widgetTypeFromId = (id: string) => {
+  if (id.startsWith('trafficOverview')) return 'core.trafficOverview'
   if (id.startsWith('trafficTrends')) return 'core.trafficTrends'
   if (id.startsWith('productFunnel')) return 'core.productFunnel'
   if (id.startsWith('topEvents')) return 'core.topEvents'
   if (id.startsWith('rankings')) return 'core.topPages'
+  if (id.startsWith('referrers')) return 'core.topReferrers'
   if (id.startsWith('overview')) return 'core.overview'
   if (id.startsWith('trends')) return 'core.trends'
   if (id.startsWith('retention')) return 'core.retention'
@@ -1354,6 +1392,19 @@ const overviewItems = computed(() => {
   return base
 })
 
+const trafficOverviewItems = computed(() => {
+  if (!trafficSummary.value) return {}
+  const pageViews = trafficSummary.value.pageViews
+  const visitors = trafficSummary.value.visitors
+  return {
+    [t('metrics.trafficOverviewItems.pageViews')]: formatNumber(pageViews),
+    [t('metrics.trafficOverviewItems.visitors')]: formatNumber(visitors),
+    [t('metrics.trafficOverviewItems.viewsPerVisitor')]: visitors > 0
+      ? (pageViews / visitors).toFixed(2)
+      : '0.00',
+  }
+})
+
 const productFunnelRows = computed(() => {
   return (productFunnel.value?.groups || []).flatMap(group =>
     group.steps.map(step => ({
@@ -1503,6 +1554,20 @@ const loadTrafficTrends = async (context: ProjectRequestContext = captureProject
   }
 }
 
+const loadTrafficSummary = async (context: ProjectRequestContext = captureProjectContext()) => {
+  if (!requireProject()) return
+  trafficSummaryLoading.value = true
+  try {
+    const res = await getTrafficSummary(cleanParams({ projectId: context.projectId, ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
+    trafficSummary.value = res.data.data
+  } catch (error) {
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.trafficSummaryFailed')))
+  } finally {
+    if (isCurrentProjectContext(context)) trafficSummaryLoading.value = false
+  }
+}
+
 const loadTopPages = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
   const configuredLimit = configForWidget('core.topPages').limit
@@ -1516,6 +1581,22 @@ const loadTopPages = async (context: ProjectRequestContext = captureProjectConte
     if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.topPagesFailed')))
   } finally {
     if (isCurrentProjectContext(context)) topPagesLoading.value = false
+  }
+}
+
+const loadTopReferrers = async (context: ProjectRequestContext = captureProjectContext()) => {
+  if (!requireProject()) return
+  const configuredLimit = configForWidget('core.topReferrers').limit
+  const limit = typeof configuredLimit === 'number' ? configuredLimit : context.snapshot.topEventsLimit
+  topReferrersLoading.value = true
+  try {
+    const res = await getTopReferrers(cleanParams({ projectId: context.projectId, limit, ...rangeParams(context.snapshot) }))
+    if (!isCurrentProjectContext(context)) return
+    topReferrers.value = res.data.data.items
+  } catch (error) {
+    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.topReferrersFailed')))
+  } finally {
+    if (isCurrentProjectContext(context)) topReferrersLoading.value = false
   }
 }
 
@@ -1650,8 +1731,10 @@ const refreshAll = async () => {
       if (type === 'core.overview') loadPromises.push(loadOverview(context))
       else if (type === 'core.trends') loadPromises.push(loadTrends(context))
       else if (type === 'core.topEvents') loadPromises.push(loadTopEvents(context))
+      else if (type === 'core.trafficOverview') loadPromises.push(loadTrafficSummary(context))
       else if (type === 'core.trafficTrends') loadPromises.push(loadTrafficTrends(context))
       else if (type === 'core.topPages') loadPromises.push(loadTopPages(context))
+      else if (type === 'core.topReferrers') loadPromises.push(loadTopReferrers(context))
       else if (type === 'core.productFunnel') loadPromises.push(loadProductFunnel(context))
       else if (type === 'core.retention') loadPromises.push(loadRetention(context))
       else if (type === 'core.traffic') loadPromises.push(loadTraffic(context))
@@ -1810,8 +1893,10 @@ const clearLoadingStates = () => {
   devicesLoading.value = false
   sessionsLoading.value = false
   trafficLoading.value = false
+  trafficSummaryLoading.value = false
   trafficTrendsLoading.value = false
   topPagesLoading.value = false
+  topReferrersLoading.value = false
   productFunnelLoading.value = false
   retentionLoading.value = false
   refreshing.value = false
@@ -1821,8 +1906,10 @@ const clearProjectScopedState = () => {
   overview.value = null
   trends.value = null
   topEvents.value = null
+  trafficSummary.value = null
   trafficTrends.value = null
   topPages.value = []
+  topReferrers.value = []
   productFunnel.value = null
   retention.value = null
   semanticEventCatalog.value = []
@@ -2139,6 +2226,10 @@ onUnmounted(() => {
   grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   padding: 4px;
+}
+
+.traffic-overview-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .overview-mini-card {

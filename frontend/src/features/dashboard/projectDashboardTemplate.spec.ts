@@ -10,7 +10,9 @@ describe('project dashboard templates', () => {
     expect(appSpaces[0]?.defaultLayout.map((item) => item.type)).not.toContain('core.trafficTrends')
     expect(appSpaces[1]?.defaultLayout.map((item) => item.type)).not.toContain('core.traffic')
     expect(websiteSpaces.map((space) => space.key)).toEqual(['overview', 'details'])
+    expect(websiteSpaces[0]?.defaultLayout.map((item) => item.type)).toContain('core.trafficOverview')
     expect(websiteSpaces[0]?.defaultLayout.map((item) => item.type)).toContain('core.trafficTrends')
+    expect(websiteSpaces[0]?.defaultLayout.map((item) => item.type)).toContain('core.topReferrers')
     expect(websiteSpaces[1]?.defaultLayout.map((item) => item.type)).toEqual(['core.traffic'])
   })
 
@@ -18,6 +20,7 @@ describe('project dashboard templates', () => {
     const spaces = dashboardSpacesForTemplate('webapp')
 
     expect(spaces.map((space) => space.key)).toEqual(['overview', 'details'])
+    expect(spaces[0]?.defaultLayout.map((item) => item.type)).toContain('core.trafficOverview')
     expect(spaces[0]?.defaultLayout.map((item) => item.type)).toContain('core.trafficTrends')
     expect(spaces[1]?.defaultLayout.map((item) => item.type)).toEqual([
       'core.events', 'core.traffic', 'core.devices', 'core.sessions',
