@@ -75,7 +75,7 @@ export const defineDashboardWidgetExtension = <TConfig extends DashboardExtensio
 const extensionTypePattern = /^custom\.[A-Za-z0-9][A-Za-z0-9_-]*(?:\.[A-Za-z0-9][A-Za-z0-9_-]*)*$/
 const localePattern = /^(?:default|[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*)$/
 const validSpaces = new Set<DashboardExtensionSpace>([
-  'app', 'website', 'product', 'details', 'custom',
+  'overview', 'details',
 ])
 const maxConfigBytes = 256 * 1024
 const extensionByType = new Map<string, DashboardWidgetExtension>()

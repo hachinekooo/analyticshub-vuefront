@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { MetricsGranularity } from '@/api/metrics'
-import type { TrafficPlatform } from '@/utils/metricsFilters'
 import type { DashboardSpaceDefinition, DashboardSpaceKey } from '@/features/dashboard/projectDashboardTemplate'
 import { useI18n } from '@/i18n'
 
@@ -10,7 +9,6 @@ const props = defineProps<{
   spaces: readonly DashboardSpaceDefinition[]
   dateRange: string[] | null
   granularity: MetricsGranularity
-  platform: TrafficPlatform
   userId: string
   deviceId: string
   refreshing: boolean
@@ -25,7 +23,6 @@ const emit = defineEmits<{
   'update:deviceId': [value: string]
   apply: []
   customize: []
-  selectPlatform: [value: TrafficPlatform]
 }>()
 
 const { t } = useI18n()
@@ -56,7 +53,7 @@ const isDetailSpace = computed(() => props.spaces.find((item) => item.key === pr
           <el-icon class="el-icon--left"><Refresh /></el-icon>
           {{ t('buttons.applyFilters') }}
         </el-button>
-        <el-button type="primary" plain @click="emit('customize')">
+        <el-button v-if="!isDetailSpace" type="primary" plain @click="emit('customize')">
           <el-icon class="el-icon--left"><Setting /></el-icon>
           {{ t('metrics.customization.open') }}
         </el-button>
@@ -99,29 +96,8 @@ const isDetailSpace = computed(() => props.spaces.find((item) => item.key === pr
       <div v-if="isDetailSpace" class="filter-group detail-filter-group">
         <div class="filter-heading">
           {{ t('metrics.detailFilters') }}
-          <span class="filter-help">{{ t('metrics.detailFilterHelp') }}</span>
         </div>
         <el-form inline label-position="top" class="filter-form">
-          <el-form-item :label="t('filters.platform')">
-            <div class="segmented-control platform-control">
-              <button
-                type="button"
-                :class="{ 'is-active': platform === 'web' }"
-                :aria-pressed="platform === 'web'"
-                @click="emit('selectPlatform', 'web')"
-              >
-                {{ t('filters.platformWeb') }}
-              </button>
-              <button
-                type="button"
-                :class="{ 'is-active': platform === 'app' }"
-                :aria-pressed="platform === 'app'"
-                @click="emit('selectPlatform', 'app')"
-              >
-                {{ t('filters.platformApp') }}
-              </button>
-            </div>
-          </el-form-item>
           <el-form-item :label="t('filters.userId')">
             <el-input
               :model-value="userId"

@@ -4,13 +4,12 @@ import MetricsControlBar from './MetricsControlBar.vue'
 import { dashboardSpacesForTemplate } from '@/features/dashboard/projectDashboardTemplate'
 import { setLocale } from '@/i18n'
 
-const mountBar = (space: 'app' | 'details') => shallowMount(MetricsControlBar, {
+const mountBar = (space: 'overview' | 'details') => shallowMount(MetricsControlBar, {
   props: {
     space,
     spaces: dashboardSpacesForTemplate('app'),
     dateRange: null,
     granularity: 'day',
-    platform: 'app',
     userId: '',
     deviceId: '',
     refreshing: false,
@@ -42,13 +41,20 @@ describe('MetricsControlBar', () => {
     expect(wrapper.find('.filter-section').classes()).toContain('combined-filters')
     expect(wrapper.find('.filter-divider').exists()).toBe(true)
     expect(wrapper.findAll('.filter-group')).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('官网')
+    expect(wrapper.text()).not.toContain('App')
   })
 
   it('keeps the normal dashboard filter section compact without a divider', () => {
-    const wrapper = mountBar('app')
+    const wrapper = mountBar('overview')
 
     expect(wrapper.findAll('.filter-section')).toHaveLength(1)
     expect(wrapper.find('.filter-divider').exists()).toBe(false)
     expect(wrapper.findAll('.filter-group')).toHaveLength(1)
+  })
+
+  it('keeps layout editing on the dashboard and removes it from raw details', () => {
+    expect(mountBar('overview').findAllComponents({ name: 'ElButton' })).toHaveLength(2)
+    expect(mountBar('details').findAllComponents({ name: 'ElButton' })).toHaveLength(1)
   })
 })

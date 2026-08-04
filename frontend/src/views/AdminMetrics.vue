@@ -7,7 +7,6 @@
       :spaces="dashboardSpaces"
       :date-range="filters.dateRange"
       :granularity="filters.granularity"
-      :platform="filters.platform"
       :user-id="filters.userId"
       :device-id="filters.deviceId"
       :refreshing="refreshing"
@@ -17,7 +16,6 @@
       @update:granularity="filters.granularity = $event"
       @update:user-id="filters.userId = $event"
       @update:device-id="filters.deviceId = $event"
-      @select-platform="selectPlatform"
       @apply="applyFilters"
       @customize="startLayoutEditing"
     />
@@ -182,7 +180,7 @@
                 </div>
 
                 <!-- Counters Widget -->
-                <CounterWidget
+                <CounterDisplayWidget
                   v-else-if="isWidgetType(item, 'core.counters')"
                   class="widget-content"
                   :project-id="filters.projectId"
@@ -445,11 +443,10 @@ import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import MetricsControlBar from '@/components/metrics/MetricsControlBar.vue'
 import DashboardEditorPanel from '@/components/metrics/DashboardEditorPanel.vue'
-import CounterWidget from '@/features/counters/CounterWidget.vue'
+import CounterDisplayWidget from '@/features/counters/CounterDisplayWidget.vue'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
 import { projectIdFromParam, projectRoute } from '@/utils/projectRoutes'
-import { trafficMetricTypeForPlatform, type TrafficPlatform } from '@/utils/metricsFilters'
 import {
   cloneDashboardLayout,
   dashboardSpacesForTemplate,
@@ -560,7 +557,6 @@ const filters = reactive({
   sessionId: '',
   apiKey: '',
   isBanned: '',
-  platform: 'web' as TrafficPlatform,
 })
 const extensionRefreshToken = ref(0)
 
@@ -574,7 +570,6 @@ type MetricsRequestSnapshot = Readonly<{
   sessionId: string
   apiKey: string
   isBanned: string
-  platform: TrafficPlatform
   eventsPage: number
   devicesPage: number
   sessionsPage: number
@@ -602,7 +597,6 @@ const captureFilterSnapshot = (): AppliedMetricsFilters => ({
   sessionId: filters.sessionId,
   apiKey: filters.apiKey,
   isBanned: filters.isBanned,
-  platform: filters.platform,
 })
 // `filters` is the editable form state; requests only read this committed snapshot.
 // This prevents half-entered filters from triggering competing request batches.
@@ -1529,10 +1523,9 @@ const loadTraffic = async (context: ProjectRequestContext = captureProjectContex
   if (!requireProject()) return
   const config = configForWidget('core.traffic')
   const pageSize = typeof config.pageSize === 'number' ? config.pageSize : traffic.pageSize
-  const metricType = trafficMetricTypeForPlatform(context.snapshot.platform)
   trafficLoading.value = true
   try {
-    const res = await getTrafficMetrics(cleanParams({ projectId: context.projectId, page: context.snapshot.trafficPage, pageSize, metricType, userId: context.snapshot.userId, deviceId: context.snapshot.deviceId, sessionId: context.snapshot.sessionId, ...rangeParams(context.snapshot) }))
+    const res = await getTrafficMetrics(cleanParams({ projectId: context.projectId, page: context.snapshot.trafficPage, pageSize, userId: context.snapshot.userId, deviceId: context.snapshot.deviceId, sessionId: context.snapshot.sessionId, ...rangeParams(context.snapshot) }))
     if (!isCurrentProjectContext(context)) return
     Object.assign(traffic, res.data.data)
   } catch (error) {
@@ -1637,14 +1630,6 @@ const applyFilters = async () => {
   resetPages()
   commitFilterSnapshot()
   await refreshAll()
-}
-
-const selectPlatform = (platform: TrafficPlatform) => {
-  if (filters.platform === platform) return
-  filters.platform = platform
-  appliedFilters.value = { ...appliedFilters.value, platform }
-  traffic.page = 1
-  void loadTraffic(beginTargetedRequestContext())
 }
 
 const refreshAll = async () => {
@@ -1880,7 +1865,6 @@ const resetProjectDetailFilters = () => {
   filters.apiKey = ''
   filters.isBanned = ''
   filters.eventType = ''
-  filters.platform = 'web'
 }
 
 const activateWorkspace = async (projectChanged: boolean) => {

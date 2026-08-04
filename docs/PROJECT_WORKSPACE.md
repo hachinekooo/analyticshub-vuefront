@@ -12,7 +12,7 @@ agent_notes: 修改项目路由、Dashboard 或组件扩展前阅读；接口字
 ## 页面职责
 
 - `/projects` 是项目管理首页，只负责项目卡片、创建、编辑、连接检查和初始化入口。
-- `/projects/:projectId/dashboard` 是项目数据大屏；项目 ID 只取 route params，不再维护 query/localStorage 的第二套来源。
+- `/projects/:projectId/dashboard` 固定提供只读的“数据大屏 / 明细数据”两个空间；项目 ID 只取 route params，不再维护 query/localStorage 的第二套来源。
 - 同一项目下的 `semantics`、`counters`、`privacy` 分别负责指标字典、累计统计和隐私工单。
 - `AdminShell` 只负责全局导航、当前项目切换和语言；业务状态留在对应页面。
 
@@ -22,14 +22,16 @@ agent_notes: 修改项目路由、Dashboard 或组件扩展前阅读；接口字
 
 `src/features/dashboard/projectDashboardTemplate.ts` 是前端模板的唯一事实来源：
 
-| 模板 | 工作区 |
-| --- | --- |
-| App | APP 运营、明细数据 |
-| Website | 网站流量、明细数据 |
-| Web App | 产品运营、网站流量、明细数据 |
-| Blank | 自定义、明细数据 |
+| 模板 | 数据大屏 | 明细数据 |
+| --- | --- | --- |
+| App | 产品行为、事件趋势和核心动作 | 事件、设备、会话 |
+| Website | 页面访问趋势、访客和热门页面 | 页面访问记录 |
+| Web App | 产品行为与页面访问 | 业务事件、页面访问、设备和会话 |
+| Blank | 空白编排区 | 空白数据集 |
 
-App 默认组件不包含网站 PV/UV；设备表只表示设备记录，不冒充独立访客。模板负责给出初始编排，管理员保存后的 Dashboard definition 由服务端持久化。
+模板只决定两个稳定空间中的默认组件和数据集，不在明细页提供 App/Website 二次切换。App 默认组件不包含网站 PV/UV；Website 不包含 App `screen_view`；Web App 才同时展示页面访问和产品事件。模板负责给出初始编排，管理员保存后的 Dashboard definition 由服务端持久化。
+
+数据大屏和明细组件不创建、编辑或删除业务数据。数据大屏只保留页面级布局配置；明细数据不提供布局编辑。语义映射与 Counter 维护分别由顶部导航的“指标字典”和“计数器”页面负责，Dashboard Counter 组件只读展示数值。
 
 ## Dashboard 状态
 
