@@ -20,15 +20,22 @@ AnalyticsHub 的 Vue 3 管理端。应用以 `/analyticshub/` 为默认部署路
 
 ## 快速开始
 
+先按照后端仓库的 [快速启动指南](https://github.com/hachinekooo/analyticshub-javaback/blob/main/QUICKSTART.md) 启动本地 API（默认 `http://127.0.0.1:3001`）。前端开发环境默认通过 Vite 将 `/api` 代理到该地址，不需要额外配置 CORS。
+
 请使用 `frontend/.nvmrc` 指定的 Node.js 和 `frontend/package.json#packageManager` 指定的 pnpm：
 
 ```bash
 cd frontend
+nvm install
 nvm use
 corepack enable
 pnpm install --frozen-lockfile
 pnpm dev
 ```
+
+打开 `http://127.0.0.1:5173/analyticshub/`，使用后端配置的同一个 `ADMIN_TOKEN` 登录。要直接查看 App、Website、WebApp 三种模板及完整模拟数据，请先执行后端仓库的 [`examples/demo-data/seed.sh`](https://github.com/hachinekooo/analyticshub-javaback/tree/main/examples/demo-data)。
+
+开发代理或页面标题需要调整时，复制 `frontend/.env.development.example` 为 `frontend/.env.development`；默认本地启动不需要创建该文件。
 
 ## 工程门禁
 
