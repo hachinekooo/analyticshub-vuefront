@@ -45,6 +45,8 @@ agent_notes: 修改项目路由、Dashboard 或组件扩展前阅读；接口字
 
 网络请求必须同时绑定 project ID 和请求 generation，项目/工作区切换后忽略过期响应，避免旧项目数据覆盖当前页面。
 
+服务端 Dashboard definition 的 `defaultRange` 是项目初始数据范围。首次进入或切换项目时，前端将 `24h` / `7d` / `30d` / `90d` 预置值转换成可见日期并用于第一批请求；`custom` 不预置日期。用户临时筛选日期不会顺带改写 Dashboard 默认值。
+
 ## 扩展与审查
 
 开源底座只执行声明式 `core.*` 和构建期注册的 `custom.*` widget。新增内置组件应同时补：模板归属、前端渲染、后端 allow-list、API 契约、空态/错误态和测试。私有业务组件在下游仓库静态注册，不把 HTML、JavaScript、SQL 或私有事件 Key 存进 Dashboard definition。

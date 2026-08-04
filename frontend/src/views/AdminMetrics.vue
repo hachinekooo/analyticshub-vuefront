@@ -480,6 +480,10 @@ import {
   type DashboardSpaceKey,
 } from '@/features/dashboard/projectDashboardTemplate'
 import {
+  dateRangeForDashboardPreset,
+  type DashboardDefaultRange,
+} from '@/features/dashboard/dashboardDateRange'
+import {
   getDashboardWidgetExtension,
   getDashboardWidgetExtensions,
   normalizeDashboardExtensionConfig,
@@ -572,6 +576,7 @@ const dashboardSpaces = computed(() => dashboardSpacesForTemplate(
 const activeSpace = ref<DashboardSpaceKey>(dashboardSpaces.value[0]!.key)
 const dashboardLayout = ref<DashboardItem[]>([])
 const serverDashboards = ref<AdminDashboard[]>([])
+const dashboardDefaultRange = ref<DashboardDefaultRange>('7d')
 const dashboardSaving = ref(false)
 const layoutBeforeEditing = ref<DashboardItem[] | null>(null)
 
@@ -1044,6 +1049,10 @@ const confirmConfiguredWidget = () => {
 const applyServerDashboard = (dashboard: AdminDashboard) => {
   const widgets = dashboard.definition?.widgets
   if (!Array.isArray(widgets)) return false
+  dashboardDefaultRange.value = dashboard.definition.defaultRange ?? '7d'
+  if (!filters.dateRange) {
+    filters.dateRange = dateRangeForDashboardPreset(dashboardDefaultRange.value)
+  }
   dashboardLayout.value = widgets.map((widget) => ({
     i: widget.id,
     type: widget.type,
@@ -1117,6 +1126,7 @@ const loadLayout = async () => {
   const spaceDefinition = dashboardSpaces.value.find((item) => item.key === space)
   if (!spaceDefinition) return
   dashboardAnalyticsConfig.value = {}
+  dashboardDefaultRange.value = '7d'
   if (projectId) {
     try {
       const response = await getProjectDashboards(projectId)
@@ -1142,6 +1152,9 @@ const loadLayout = async () => {
     || filters.projectId !== projectId
     || activeSpace.value !== space) return
   dashboardLayout.value = cloneDashboardLayout(spaceDefinition.defaultLayout)
+  if (!filters.dateRange) {
+    filters.dateRange = dateRangeForDashboardPreset(dashboardDefaultRange.value)
+  }
   syncAnalyticsConfigFromLayout()
 }
 
@@ -1300,7 +1313,7 @@ const toServerDefinition = (): DashboardDefinition | null => {
   }
   return {
     schemaVersion: 1,
-    defaultRange: appliedFilters.value.dateRange ? 'custom' : '7d',
+    defaultRange: dashboardDefaultRange.value,
     widgets,
   }
 }
@@ -1946,6 +1959,7 @@ const disposeWorkspaceCharts = () => {
 }
 
 const resetProjectDetailFilters = () => {
+  filters.dateRange = null
   filters.userId = ''
   filters.deviceId = ''
   filters.sessionId = ''
