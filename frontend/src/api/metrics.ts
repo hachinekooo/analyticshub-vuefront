@@ -85,6 +85,7 @@ export type DeviceRecord = {
   apiKey: string
   deviceModel: string
   osVersion: string
+  /** 当前分析设备记录的注册版本快照，不代表安装版本或当前活跃版本。 */
   appVersion: string
   isBanned: boolean
   banReason: string | null

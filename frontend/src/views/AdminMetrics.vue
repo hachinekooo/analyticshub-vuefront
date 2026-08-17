@@ -288,7 +288,8 @@
                    <el-table :data="devices.items" size="small" style="width: 100%">
                       <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="120" show-overflow-tooltip />
                       <el-table-column prop="deviceModel" :label="t('tables.model')" min-width="120" show-overflow-tooltip />
-                      <el-table-column prop="createdAt" :label="t('tables.startTime')" min-width="140">
+                      <el-table-column prop="appVersion" :label="t('tables.registrationVersion')" min-width="120" />
+                      <el-table-column prop="createdAt" :label="t('tables.registrationTime')" min-width="140">
                          <template #default="{ row }">{{ formatTimestamp(new Date(row.createdAt).getTime()) }}</template>
                       </el-table-column>
                       <el-table-column prop="lastActiveAt" :label="t('tables.lastActive')" min-width="140">
