@@ -57,6 +57,13 @@ pnpm check
 
 该命令依次执行 lint、单元测试、TypeScript 检查、生产构建和 bundle budget 校验。全部成功后，产物位于 `frontend/dist/`。
 
+发布 `1.1.0` 时，将完整 dist 作为一个 artifact 保存并记录 checksum；测试通过后把同一个压缩包提升到生产，不要重新构建：
+
+```bash
+tar -czf analyticshub-frontend-1.1.0.tar.gz -C frontend dist
+shasum -a 256 analyticshub-frontend-1.1.0.tar.gz
+```
+
 生产 base 固定为 `/analyticshub/`，静态资源路径为 `/analyticshub/assets/**`。
 
 ## 4. 上传产物
