@@ -42,8 +42,8 @@ const websiteLayout: readonly DashboardLayoutItem[] = [
 
 const appDetailsLayout: readonly DashboardLayoutItem[] = [
   { x: 0, y: 0, w: 6, h: 12, i: 'events_default', type: 'core.events', minW: 4, minH: 8 },
-  { x: 6, y: 0, w: 6, h: 10, i: 'devices_default', type: 'core.devices', minW: 4, minH: 6 },
-  { x: 6, y: 10, w: 6, h: 10, i: 'sessions_default', type: 'core.sessions', minW: 4, minH: 6 },
+  { x: 6, y: 0, w: 6, h: 14, i: 'devices_default', type: 'core.devices', minW: 4, minH: 8 },
+  { x: 6, y: 14, w: 6, h: 10, i: 'sessions_default', type: 'core.sessions', minW: 4, minH: 6 },
 ]
 
 const websiteDetailsLayout: readonly DashboardLayoutItem[] = [
@@ -58,7 +58,7 @@ const webAppLayout: readonly DashboardLayoutItem[] = [
 const webAppDetailsLayout: readonly DashboardLayoutItem[] = [
   { x: 0, y: 0, w: 6, h: 12, i: 'events_default', type: 'core.events', minW: 4, minH: 8 },
   { x: 6, y: 0, w: 6, h: 12, i: 'traffic_default', type: 'core.traffic', minW: 4, minH: 8 },
-  { x: 0, y: 12, w: 6, h: 10, i: 'devices_default', type: 'core.devices', minW: 4, minH: 6 },
+  { x: 0, y: 12, w: 6, h: 14, i: 'devices_default', type: 'core.devices', minW: 4, minH: 8 },
   { x: 6, y: 12, w: 6, h: 10, i: 'sessions_default', type: 'core.sessions', minW: 4, minH: 6 },
 ]
 

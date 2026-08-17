@@ -26,7 +26,27 @@ export type MetricsOverview = {
 export type TrendPoint = {
   time: string
   events: number
+  activeDevices: number
   sessions: number
+}
+
+export type AppVersionDistributionItem = {
+  appVersion: string
+  buildNumber: string
+  activeDevices: number
+  share: number
+  lastObservedAt: string
+}
+
+export type AppVersionDistribution = {
+  projectId: string
+  rangeStart: string
+  rangeEnd: string
+  measurement: 'latest_occurred_event_per_device'
+  activeDevices: number
+  versionKnownDevices: number
+  coverageRate: number
+  items: AppVersionDistributionItem[]
 }
 
 export type MetricsTrends = {
@@ -246,6 +266,14 @@ export const getMetricsTrends = (params: {
   granularity?: MetricsGranularity
 }) => {
   return request.get<ApiResponse<MetricsTrends>>('/admin/metrics/trends', { params })
+}
+
+export const getAppVersionDistribution = (params: {
+  projectId: string
+  from?: string
+  to?: string
+}) => {
+  return request.get<ApiResponse<AppVersionDistribution>>('/admin/metrics/app-versions', { params })
 }
 
 export const getTopEvents = (params: {

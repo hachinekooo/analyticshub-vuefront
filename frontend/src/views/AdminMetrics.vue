@@ -273,10 +273,18 @@
                 </div>
 
                 <!-- Devices Table Widget -->
-                <div v-else-if="isWidgetType(item, 'core.devices')" class="widget-content" v-loading="devicesLoading">
+                <div
+                  v-else-if="isWidgetType(item, 'core.devices')"
+                  class="widget-content"
+                  v-loading="devicesLoading || appVersionsLoading"
+                >
                    <div class="widget-header">
                       <span>{{ getWidgetLabel(item) }}</span>
                    </div>
+                   <AppVersionDistribution
+                     :distribution="appVersions"
+                     :failed="appVersionsFailed"
+                   />
                    <el-table :data="devices.items" size="small" style="width: 100%">
                       <el-table-column prop="deviceId" :label="t('tables.deviceId')" min-width="120" show-overflow-tooltip />
                       <el-table-column prop="deviceModel" :label="t('tables.model')" min-width="120" show-overflow-tooltip />
@@ -469,6 +477,7 @@ import { ElMessage } from 'element-plus'
 import PageHeader from '@/components/PageHeader.vue'
 import MetricsControlBar from '@/components/metrics/MetricsControlBar.vue'
 import DashboardEditorPanel from '@/components/metrics/DashboardEditorPanel.vue'
+import AppVersionDistribution from '@/components/metrics/AppVersionDistribution.vue'
 import CounterDisplayWidget from '@/features/counters/CounterDisplayWidget.vue'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
@@ -483,6 +492,7 @@ import {
   dateRangeForDashboardPreset,
   type DashboardDefaultRange,
 } from '@/features/dashboard/dashboardDateRange'
+import { findTopActiveAppVersion } from '@/features/metrics/appVersionDistribution'
 import {
   getDashboardWidgetExtension,
   getDashboardWidgetExtensions,
@@ -511,6 +521,7 @@ import {
 import {
   getDevices,
   getEvents,
+  getAppVersionDistribution,
   getMetricsOverview,
   getMetricsTrends,
   getSessions,
@@ -521,6 +532,7 @@ import {
   getTopPages,
   getTopReferrers,
   type MetricsOverview,
+  type AppVersionDistribution as AppVersionDistributionData,
   type MetricsTopEvents,
   type MetricsTrends,
   type PagedResult,
@@ -669,6 +681,8 @@ const isCurrentProjectContext = (context: ProjectRequestContext) =>
 
 // Metrics Data Collections
 const overview = ref<MetricsOverview | null>(null)
+const appVersions = ref<AppVersionDistributionData | null>(null)
+const appVersionsFailed = ref(false)
 const trends = ref<MetricsTrends | null>(null)
 const topEvents = ref<MetricsTopEvents | null>(null)
 const trafficTrends = ref<TrafficTrends | null>(null)
@@ -712,6 +726,7 @@ const activeSemanticDefinitions = computed(() => semanticDefinitions.value
 
 // Loading States
 const overviewLoading = ref(false)
+const appVersionsLoading = ref(false)
 const trendsLoading = ref(false)
 const topEventsLoading = ref(false)
 const eventsLoading = ref(false)
@@ -1395,14 +1410,18 @@ const formatJson = (value: Record<string, unknown> | null) => {
 
 const overviewItems = computed(() => {
   if (!overview.value) return {}
-  const base = {
-    [t('metrics.overviewItems.devicesTotal')]: formatNumber(overview.value.devicesTotal),
+  const leadingVersion = findTopActiveAppVersion(appVersions.value?.items ?? [])
+  const leadingVersionLabel = appVersionsFailed.value
+    ? t('metrics.appVersions.unavailable')
+    : leadingVersion
+      ? `v${leadingVersion.appVersion}`
+      : '—'
+  return {
     [t('metrics.overviewItems.devicesActive')]: formatNumber(overview.value.devicesActive),
-    [t('metrics.overviewItems.sessionsTotal')]: formatNumber(overview.value.sessionsTotal),
-    [t('metrics.overviewItems.avgSessionDuration')]: formatDuration(overview.value.avgSessionDurationMs),
+    [t('metrics.overviewItems.usersActive')]: formatNumber(overview.value.usersActive),
+    [t('metrics.overviewItems.eventsTotal')]: formatNumber(overview.value.eventsTotal),
+    [t('metrics.overviewItems.topAppVersion')]: leadingVersionLabel,
   }
-
-  return base
 })
 
 const trafficOverviewItems = computed(() => {
@@ -1444,6 +1463,28 @@ const loadOverview = async (context: ProjectRequestContext = captureProjectConte
     if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.overviewFailed')))
   } finally {
     if (isCurrentProjectContext(context)) overviewLoading.value = false
+  }
+}
+
+const loadAppVersions = async (context: ProjectRequestContext = captureProjectContext()) => {
+  if (!requireProject()) return
+  appVersions.value = null
+  appVersionsFailed.value = false
+  appVersionsLoading.value = true
+  try {
+    const response = await getAppVersionDistribution(cleanParams({
+      projectId: context.projectId,
+      ...rangeParams(context.snapshot),
+    }))
+    if (!isCurrentProjectContext(context)) return
+    appVersions.value = response.data.data
+  } catch (error) {
+    if (isCurrentProjectContext(context)) {
+      appVersionsFailed.value = true
+      ElMessage.error(getErrorMessage(error, t('errors.appVersionsFailed')))
+    }
+  } finally {
+    if (isCurrentProjectContext(context)) appVersionsLoading.value = false
   }
 }
 
@@ -1740,6 +1781,9 @@ const refreshAll = async () => {
     if (widgetTypes.some((type) => type === 'core.productFunnel' || type === 'core.retention')) {
       loadPromises.push(loadSemanticDefinitions())
     }
+    if (widgetTypes.some((type) => type === 'core.overview' || type === 'core.devices')) {
+      loadPromises.push(loadAppVersions(context))
+    }
     for (const type of widgetTypes) {
       if (type === 'core.overview') loadPromises.push(loadOverview(context))
       else if (type === 'core.trends') loadPromises.push(loadTrends(context))
@@ -1825,7 +1869,7 @@ const updateBusinessTrendsChart = () => {
 
   const option = {
     tooltip: { trigger: 'axis' },
-    legend: { data: [t('metrics.chart.events'), t('metrics.chart.sessions')], bottom: 0 },
+    legend: { data: [t('metrics.chart.events'), t('metrics.chart.activeDevices')], bottom: 0 },
     grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
     xAxis: {
       type: 'category',
@@ -1843,10 +1887,10 @@ const updateBusinessTrendsChart = () => {
         areaStyle: { opacity: 0.1 }
       },
       {
-        name: t('metrics.chart.sessions'),
+        name: t('metrics.chart.activeDevices'),
         type: 'line',
         smooth: true,
-        data: trends.value.points.map(p => p.sessions),
+        data: trends.value.points.map(p => p.activeDevices),
         color: '#ff9500',
         areaStyle: { opacity: 0.1 }
       }
@@ -1900,6 +1944,7 @@ const layoutVisible = ref(false)
 
 const clearLoadingStates = () => {
   overviewLoading.value = false
+  appVersionsLoading.value = false
   trendsLoading.value = false
   topEventsLoading.value = false
   eventsLoading.value = false
@@ -1917,6 +1962,8 @@ const clearLoadingStates = () => {
 
 const clearProjectScopedState = () => {
   overview.value = null
+  appVersions.value = null
+  appVersionsFailed.value = false
   trends.value = null
   topEvents.value = null
   trafficSummary.value = null
