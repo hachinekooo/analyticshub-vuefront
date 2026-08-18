@@ -232,6 +232,8 @@ export type FunnelResponse = {
   rangeEnd: string
   steps: string[]
   groupBy: string | null
+  journeyKey: string | null
+  countingUnit: 'actors' | 'journeys'
   attributionModel: string
   groups: FunnelGroupResult[]
 }
@@ -419,6 +421,7 @@ export const getProductFunnel = (params: {
   to?: string
   steps: string
   groupBy?: string
+  journeyKey?: string
 }) => {
   return request.get<ApiResponse<FunnelResponse>>('/admin/analytics/funnel', { params })
 }

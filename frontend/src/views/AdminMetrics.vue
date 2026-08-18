@@ -127,7 +127,7 @@
                    <el-table v-else :data="productFunnelRows" size="small" style="width: 100%">
                       <el-table-column prop="groupKey" :label="t('tables.group')" min-width="140" show-overflow-tooltip />
                       <el-table-column prop="step" :label="t('tables.step')" min-width="180" show-overflow-tooltip />
-                      <el-table-column prop="users" :label="t('tables.users')" min-width="90" />
+                      <el-table-column prop="users" :label="productFunnelCountLabel" min-width="90" />
                       <el-table-column prop="conversionRate" :label="t('tables.conversion')" min-width="110">
                         <template #default="{ row }">{{ formatPercent(row.conversionRate) }}</template>
                       </el-table-column>
@@ -412,6 +412,15 @@
               :placeholder="t('metrics.widgetConfig.groupByPlaceholder')"
             />
           </el-form-item>
+          <el-form-item :label="t('metrics.widgetConfig.journeyKey')">
+            <el-input
+              v-model="widgetConfigForm.journeyKey"
+              maxlength="80"
+              clearable
+              :placeholder="t('metrics.widgetConfig.journeyKeyPlaceholder')"
+            />
+            <div class="form-tip">{{ t('metrics.widgetConfig.journeyKeyTip') }}</div>
+          </el-form-item>
         </template>
 
         <template v-else-if="widgetConfigType === 'core.retention'">
@@ -562,6 +571,7 @@ interface DashboardAnalyticsConfig {
   funnel?: {
     steps: string[]
     groupBy?: string
+    journeyKey?: string
   }
   retention?: {
     cohortEvent: string
@@ -712,6 +722,7 @@ const widgetConfigForm = reactive({
   height: 8,
   funnelSteps: [] as string[],
   groupBy: '',
+  journeyKey: '',
   cohortEvent: '',
   returnEvent: '',
   retentionDaysText: '1, 7, 30',
@@ -918,6 +929,7 @@ const appendWidgetType = (type: string, config?: Record<string, unknown>) => {
       funnel: {
         steps: config.steps as string[],
         groupBy: typeof config.groupBy === 'string' ? config.groupBy : undefined,
+        journeyKey: typeof config.journeyKey === 'string' ? config.journeyKey : undefined,
       },
     }
   }
@@ -944,6 +956,7 @@ const resetWidgetConfigForm = () => {
     height: 8,
     funnelSteps: [],
     groupBy: '',
+    journeyKey: '',
     cohortEvent: '',
     returnEvent: '',
     retentionDaysText: '1, 7, 30',
@@ -969,6 +982,7 @@ const openWidgetConfig = (item: DashboardItem) => {
       ? item.config.steps.filter((step): step is string => typeof step === 'string')
       : []
     widgetConfigForm.groupBy = typeof item.config?.groupBy === 'string' ? item.config.groupBy : ''
+    widgetConfigForm.journeyKey = typeof item.config?.journeyKey === 'string' ? item.config.journeyKey : ''
   }
   if (type === 'core.retention') {
     widgetConfigForm.cohortEvent = typeof item.config?.cohortEvent === 'string' ? item.config.cohortEvent : ''
@@ -1023,6 +1037,12 @@ const confirmConfiguredWidget = () => {
     }
     config.steps = steps
     if (groupBy) config.groupBy = groupBy
+    const journeyKey = widgetConfigForm.journeyKey.trim()
+    if (journeyKey && !validAnalyticsKey(journeyKey, 80)) {
+      ElMessage.warning(t('metrics.widgetConfig.invalidJourneyKey'))
+      return
+    }
+    if (journeyKey) config.journeyKey = journeyKey
   } else if (type === 'core.retention') {
     const cohortEvent = widgetConfigForm.cohortEvent.trim()
     const returnEvent = widgetConfigForm.returnEvent.trim()
@@ -1089,6 +1109,7 @@ const applyServerDashboard = (dashboard: AdminDashboard) => {
         config.funnel = {
           steps,
           groupBy: typeof widget.config.groupBy === 'string' ? widget.config.groupBy : undefined,
+          journeyKey: typeof widget.config.journeyKey === 'string' ? widget.config.journeyKey : undefined,
         }
       }
     }
@@ -1116,6 +1137,7 @@ const syncAnalyticsConfigFromLayout = () => {
     next.funnel = {
       steps: funnel.config.steps.filter((step): step is string => typeof step === 'string'),
       groupBy: typeof funnel.config.groupBy === 'string' ? funnel.config.groupBy : undefined,
+      journeyKey: typeof funnel.config.journeyKey === 'string' ? funnel.config.journeyKey : undefined,
     }
   }
   const retentionWidget = dashboardLayout.value.find((item) => resolvedWidgetType(item) === 'core.retention')
@@ -1450,6 +1472,10 @@ const productFunnelRows = computed(() => {
   )
 })
 
+const productFunnelCountLabel = computed(() =>
+  productFunnel.value?.countingUnit === 'journeys' ? t('tables.journeys') : t('tables.users'),
+)
+
 // --- 6. Metric Loading Functions ---
 const loadOverview = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
@@ -1674,7 +1700,11 @@ const loadTraffic = async (context: ProjectRequestContext = captureProjectContex
 const loadProductFunnel = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
   const sourceConfig = dashboardAnalyticsConfig.value.funnel
-  const config = sourceConfig ? { steps: [...sourceConfig.steps], groupBy: sourceConfig.groupBy } : undefined
+  const config = sourceConfig ? {
+    steps: [...sourceConfig.steps],
+    groupBy: sourceConfig.groupBy,
+    journeyKey: sourceConfig.journeyKey,
+  } : undefined
   if (!config) {
     productFunnel.value = null
     return
@@ -1685,6 +1715,7 @@ const loadProductFunnel = async (context: ProjectRequestContext = captureProject
       projectId: context.projectId,
       steps: config.steps.join(','),
       groupBy: config.groupBy,
+      journeyKey: config.journeyKey,
       ...rangeParams(context.snapshot),
     }))
     if (!isCurrentProjectContext(context)) return
@@ -2280,6 +2311,13 @@ onUnmounted(() => {
   margin-top: 10px;
   display: flex;
   justify-content: center;
+}
+
+.form-tip {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 /* Overview Widget Styling */
