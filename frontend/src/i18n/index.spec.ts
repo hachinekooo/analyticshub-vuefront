@@ -55,4 +55,24 @@ describe('i18n locale resolution and fallback', () => {
     expect(t('missing.translation.key')).toBe('missing.translation.key')
     expect(t('buttons')).toBe('buttons')
   })
+
+  it('keeps every business-trend legend and explanation localized', async () => {
+    const { setLocale, t } = await importI18n()
+    const keys = [
+      'metrics.chart.activeUsers',
+      'metrics.chart.activeDevices',
+      'metrics.chart.cloudAccountsCreated',
+      'metrics.chart.cloudAccountsRecreated',
+      'metrics.chart.activityAxis',
+      'metrics.chart.accountAxis',
+      'metrics.help.productFunnel',
+      'metrics.help.retention',
+      'tables.allUsers',
+    ]
+
+    for (const language of ['zh', 'en'] as const) {
+      setLocale(language)
+      for (const key of keys) expect(t(key)).not.toBe(key)
+    }
+  })
 })

@@ -53,8 +53,8 @@ describe('MetricsControlBar', () => {
     expect(wrapper.findAll('.filter-group')).toHaveLength(1)
   })
 
-  it('keeps layout editing on the dashboard and removes it from raw details', () => {
+  it('offers layout editing in both overview and detailed-data workspaces', () => {
     expect(mountBar('overview').findAllComponents({ name: 'ElButton' })).toHaveLength(2)
-    expect(mountBar('details').findAllComponents({ name: 'ElButton' })).toHaveLength(1)
+    expect(mountBar('details').findAllComponents({ name: 'ElButton' })).toHaveLength(2)
   })
 })

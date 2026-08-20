@@ -33,7 +33,7 @@ describe('DashboardEditorPanel', () => {
   it('shows a compact editing workflow without draft or publishing states', () => {
     const wrapper = mountPanel()
 
-    expect(wrapper.text()).toContain('调整数据大屏布局')
+    expect(wrapper.text()).toContain('调整当前视图布局')
     expect(wrapper.text()).toContain('重置布局')
     expect(wrapper.text()).toContain('取消')
     expect(wrapper.text()).toContain('完成')

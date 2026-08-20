@@ -53,7 +53,7 @@ const isDetailSpace = computed(() => props.spaces.find((item) => item.key === pr
           <el-icon class="el-icon--left"><Refresh /></el-icon>
           {{ t('buttons.applyFilters') }}
         </el-button>
-        <el-button v-if="!isDetailSpace" type="primary" plain @click="emit('customize')">
+        <el-button type="primary" plain :disabled="editing" @click="emit('customize')">
           <el-icon class="el-icon--left"><Setting /></el-icon>
           {{ t('metrics.customization.open') }}
         </el-button>

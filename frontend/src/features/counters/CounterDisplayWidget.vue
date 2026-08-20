@@ -16,12 +16,14 @@ const { locale, t } = useI18n()
 const counters = ref<CounterItem[]>([])
 const loading = ref(false)
 
-const configuredKeySet = computed(() => Array.isArray(props.configuredKeys)
-  ? new Set(props.configuredKeys.filter((key): key is string => typeof key === 'string'))
+const configuredKeyOrder = computed(() => Array.isArray(props.configuredKeys)
+  ? [...new Set(props.configuredKeys.filter((key): key is string => typeof key === 'string'))]
   : null)
-const visibleCounters = computed(() => configuredKeySet.value
-  ? counters.value.filter((counter) => configuredKeySet.value!.has(counter.key))
+const counterByKey = computed(() => new Map(counters.value.map(counter => [counter.key, counter])))
+const visibleCounters = computed(() => configuredKeyOrder.value
+  ? configuredKeyOrder.value.flatMap(key => counterByKey.value.get(key) ?? [])
   : counters.value)
+const unavailableKeys = computed(() => configuredKeyOrder.value?.filter(key => !counterByKey.value.has(key)) ?? [])
 
 const localizedText = (value: Record<string, string> | string | null) => {
   if (!value) return ''
@@ -57,7 +59,17 @@ watch(() => [props.projectId, props.refreshToken], load, { immediate: true })
 
 <template>
   <section class="counter-display" v-loading="loading">
-    <div class="widget-header"><span>{{ title }}</span></div>
+    <div class="widget-header counter-heading">
+      <span>{{ title }}</span>
+      <small>{{ t('metrics.counterDashboard.currentScope') }}</small>
+    </div>
+    <el-alert
+      v-if="unavailableKeys.length"
+      class="counter-warning"
+      type="warning"
+      :closable="false"
+      :title="t('metrics.counterDashboard.unavailableKeys', { keys: unavailableKeys.join(', ') })"
+    />
     <div v-if="visibleCounters.length" class="counter-grid">
       <article v-for="counter in visibleCounters" :key="counter.key" class="counter-card">
         <span class="counter-name">{{ localizedText(counter.displayName) || counter.key }}</span>
@@ -72,6 +84,9 @@ watch(() => [props.projectId, props.refreshToken], load, { immediate: true })
 
 <style scoped>
 .counter-display { height: 100%; }
+.counter-heading { align-items: baseline; }
+.counter-heading small { color: var(--el-text-color-secondary); font-size: 11px; font-weight: 400; }
+.counter-warning { margin-bottom: 10px; }
 .counter-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

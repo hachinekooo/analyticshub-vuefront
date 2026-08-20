@@ -17,16 +17,23 @@ export type MetricsOverview = {
   devicesTotal: number
   devicesActive: number
   usersActive: number
+  cloudAccountsCreated: number
+  cloudAccountsRecreated: number
   sessionsTotal: number
   eventsTotal: number
   avgSessionDurationMs: number
   avgEventsPerSession: number
+  /** 新后端声明的项目级可用指标；旧服务响应可能暂时缺失。 */
+  availableMetricKeys?: string[]
 }
 
 export type TrendPoint = {
   time: string
   events: number
   activeDevices: number
+  activeUsers: number
+  cloudAccountsCreated: number
+  cloudAccountsRecreated: number
   sessions: number
 }
 
@@ -55,6 +62,8 @@ export type MetricsTrends = {
   rangeStart: string
   rangeEnd: string
   points: TrendPoint[]
+  /** 新后端声明的项目级可用趋势；旧服务响应可能暂时缺失。 */
+  availableMetricKeys?: string[]
 }
 
 export type TopEventItem = {

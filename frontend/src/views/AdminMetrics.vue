@@ -34,13 +34,16 @@
         <grid-layout
           v-if="layoutVisible"
           v-model:layout="dashboardLayout"
-          :col-num="12"
-          :row-height="30"
+          :col-num="DASHBOARD_GRID.columns"
+          :row-height="DASHBOARD_GRID.rowHeight"
+          :margin="dashboardGridSpacing"
+          :container-padding="dashboardGridSpacing"
           :is-draggable="isLayoutEditable"
           :is-resizable="isLayoutEditable"
           :vertical-compact="true"
           :use-css-transforms="true"
-          @layout-updated="handleResize"
+          :style="dashboardGridStyle"
+          @layout-updated="handleLayoutUpdated"
           class="dashboard-grid"
         >
           <grid-item v-for="item in dashboardLayout"
@@ -54,6 +57,14 @@
             :min-h="item.minH || 2"
             :is-draggable="isLayoutEditable"
             :is-resizable="isLayoutEditable"
+            drag-allow-from=".widget-header-bar"
+            :drag-option="dashboardGridDragOption"
+            :resize-option="dashboardGridResizeOption"
+            @move="handleDashboardGridMove"
+            @dragend="clearDashboardGridPreview"
+            @moved="clearDashboardGridPreview"
+            @resize="handleDashboardGridResize"
+            @resized="clearDashboardGridPreview"
 
             class="grid-item-card" :class="{ 'is-editing': isLayoutEditable }"
           >
@@ -86,9 +97,12 @@
                     <span>{{ getWidgetLabel(item) }}</span>
                   </div>
                   <div v-if="overview" class="overview-grid-compact">
-                    <div v-for="(val, label) in overviewItems" :key="label" class="overview-mini-card">
-                       <p class="mini-label">{{ label }}</p>
-                       <p class="mini-value">{{ val }}</p>
+                    <div v-for="metric in overviewItemsForWidget(item)" :key="metric.key" class="overview-mini-card">
+                       <p class="mini-label">
+                         <span>{{ metric.label }}</span>
+                         <MetricHelpIcon :content="metric.help" />
+                       </p>
+                       <p class="mini-value">{{ metric.value }}</p>
                     </div>
                   </div>
                   <el-empty v-else :description="t('metrics.noData')" :image-size="60" />
@@ -98,6 +112,7 @@
                 <div v-else-if="isWidgetType(item, 'core.trends')" class="widget-content" v-loading="trendsLoading">
                    <div class="widget-header">
                       <span>{{ getWidgetLabel(item) }}</span>
+                      <MetricHelpIcon :content="businessTrendsHelp" />
                    </div>
                    <div :id="'chart-business-' + item.i" class="echart-container"></div>
                 </div>
@@ -106,12 +121,12 @@
                 <div v-else-if="isWidgetType(item, 'core.topEvents')" class="widget-content" v-loading="topEventsLoading">
                    <div class="widget-header">
                       <span>{{ getWidgetLabel(item) }}</span>
+                      <MetricHelpIcon :content="t('metrics.help.topEvents')" />
                    </div>
                    <el-table :data="topEvents?.items || []" size="small" style="width: 100%">
                       <el-table-column :label="t('tables.eventType')" min-width="160" show-overflow-tooltip>
                         <template #default="{ row }">
-                          <div>{{ eventDisplayName(row.eventType) }}</div>
-                          <code v-if="eventDisplayName(row.eventType) !== row.eventType">{{ row.eventType }}</code>
+                          <SemanticEventLabel v-bind="eventPresentation(row.eventType)" />
                         </template>
                       </el-table-column>
                       <el-table-column prop="count" :label="t('tables.count')" min-width="120" />
@@ -122,11 +137,18 @@
                 <div v-else-if="isWidgetType(item, 'core.productFunnel')" class="widget-content" v-loading="productFunnelLoading">
                    <div class="widget-header">
                       <span>{{ getWidgetLabel(item) }}</span>
+                      <MetricHelpIcon :content="t('metrics.help.productFunnel')" />
                    </div>
                    <el-empty v-if="!dashboardAnalyticsConfig.funnel" :description="t('metrics.notConfigured')" :image-size="60" />
                    <el-table v-else :data="productFunnelRows" size="small" style="width: 100%">
-                      <el-table-column prop="groupKey" :label="t('tables.group')" min-width="140" show-overflow-tooltip />
-                      <el-table-column prop="step" :label="t('tables.step')" min-width="180" show-overflow-tooltip />
+                      <el-table-column prop="groupKey" :label="t('tables.group')" min-width="140" show-overflow-tooltip>
+                        <template #default="{ row }">{{ funnelGroupLabel(row.groupKey) }}</template>
+                      </el-table-column>
+                      <el-table-column :label="t('tables.step')" min-width="180" show-overflow-tooltip>
+                        <template #default="{ row }">
+                          <SemanticEventLabel v-bind="eventPresentation(row.step)" />
+                        </template>
+                      </el-table-column>
                       <el-table-column prop="users" :label="productFunnelCountLabel" min-width="90" />
                       <el-table-column prop="conversionRate" :label="t('tables.conversion')" min-width="110">
                         <template #default="{ row }">{{ formatPercent(row.conversionRate) }}</template>
@@ -141,6 +163,7 @@
                 <div v-else-if="isWidgetType(item, 'core.retention')" class="widget-content" v-loading="retentionLoading">
                    <div class="widget-header">
                       <span>{{ getWidgetLabel(item) }}</span>
+                      <MetricHelpIcon :content="t('metrics.help.retention')" />
                    </div>
                    <el-empty v-if="!dashboardAnalyticsConfig.retention" :description="t('metrics.notConfigured')" :image-size="60" />
                    <template v-else>
@@ -211,7 +234,7 @@
                   class="widget-content"
                   :project-id="filters.projectId"
                   :title="getWidgetLabel(item)"
-                  :configured-keys="configForWidget('core.counters').keys"
+                  :configured-keys="item.config?.keys"
                   :refresh-token="extensionRefreshToken"
                 />
 
@@ -244,12 +267,12 @@
                 <div v-else-if="isWidgetType(item, 'core.events')" class="widget-content" v-loading="eventsLoading">
                    <div class="widget-header">
                       <span>{{ getWidgetLabel(item) }}</span>
+                      <EventLegendPopover :events="currentEventLegendEvents" />
                    </div>
                    <el-table :data="events.items" size="small" style="width: 100%">
                       <el-table-column :label="t('tables.eventType')" min-width="160" show-overflow-tooltip>
                         <template #default="{ row }">
-                          <div>{{ eventDisplayName(row.eventType) }}</div>
-                          <code v-if="eventDisplayName(row.eventType) !== row.eventType">{{ row.eventType }}</code>
+                          <SemanticEventLabel v-bind="eventPresentation(row.eventType)" :show-help="false" />
                         </template>
                       </el-table-column>
                       <el-table-column prop="eventTimestamp" :label="t('tables.eventTime')" min-width="160">
@@ -361,6 +384,12 @@
               </div>
             </div>
           </grid-item>
+          <div
+            v-if="dashboardGridPreview"
+            class="dashboard-grid-drop-preview"
+            :style="dashboardGridPreviewStyle(dashboardGridPreview)"
+            aria-hidden="true"
+          />
         </grid-layout>
       </div>
 
@@ -387,7 +416,36 @@
           />
         </el-form-item>
 
-        <template v-if="widgetConfigType === 'core.productFunnel'">
+        <template v-if="widgetConfigType === 'core.overview'">
+          <el-form-item :label="t('metrics.widgetConfig.overviewMetrics')" required>
+            <OrderedSelectionEditor
+              v-model="widgetConfigForm.overviewMetricKeys"
+              :options="overviewMetricSelectionOptions"
+              :placeholder="t('metrics.widgetConfig.overviewMetricsPlaceholder')"
+              :empty-text="t('metrics.widgetConfig.overviewMetricsEmpty')"
+              :move-up-label="t('metrics.widgetConfig.moveUp')"
+              :move-down-label="t('metrics.widgetConfig.moveDown')"
+            />
+          </el-form-item>
+          <p class="form-tip">{{ t('metrics.widgetConfig.overviewMetricsTip') }}</p>
+        </template>
+
+        <template v-else-if="widgetConfigType === 'core.counters'">
+          <el-form-item :label="t('metrics.widgetConfig.counterKeys')" required>
+            <OrderedSelectionEditor
+              v-model="widgetConfigForm.counterKeys"
+              :options="counterSelectionOptions"
+              :placeholder="t('metrics.widgetConfig.counterKeysPlaceholder')"
+              :empty-text="t('metrics.widgetConfig.counterKeysEmpty')"
+              :move-up-label="t('metrics.widgetConfig.moveUp')"
+              :move-down-label="t('metrics.widgetConfig.moveDown')"
+              :loading="counterOptionsLoading"
+            />
+          </el-form-item>
+          <p class="form-tip">{{ t('metrics.widgetConfig.counterKeysTip') }}</p>
+        </template>
+
+        <template v-else-if="widgetConfigType === 'core.productFunnel'">
           <el-form-item :label="t('metrics.widgetConfig.funnelSteps')" required>
             <el-select
               v-model="widgetConfigForm.funnelSteps"
@@ -488,6 +546,10 @@ import PageHeader from '@/components/PageHeader.vue'
 import MetricsControlBar from '@/components/metrics/MetricsControlBar.vue'
 import DashboardEditorPanel from '@/components/metrics/DashboardEditorPanel.vue'
 import AppVersionDistribution from '@/components/metrics/AppVersionDistribution.vue'
+import MetricHelpIcon from '@/components/metrics/MetricHelpIcon.vue'
+import SemanticEventLabel from '@/components/metrics/SemanticEventLabel.vue'
+import EventLegendPopover from '@/components/metrics/EventLegendPopover.vue'
+import OrderedSelectionEditor, { type OrderedSelectionOption } from '@/components/metrics/OrderedSelectionEditor.vue'
 import CounterDisplayWidget from '@/features/counters/CounterDisplayWidget.vue'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
@@ -503,6 +565,26 @@ import {
   type DashboardDefaultRange,
 } from '@/features/dashboard/dashboardDateRange'
 import { findTopActiveAppVersion } from '@/features/metrics/appVersionDistribution'
+import type { SemanticEventPresentation } from '@/features/metrics/semanticEventPresentation'
+import {
+  OVERVIEW_METRIC_CATALOG,
+  OVERVIEW_METRIC_KEYS,
+  isOverviewMetricKey,
+  resolveOverviewMetricKeys,
+  resolveTrendMetricKeys,
+  type OverviewMetricKey,
+} from '@/features/metrics/overviewMetricCatalog'
+import {
+  adaptiveWidgetPageSize,
+  withoutLegacyFixedPageSize,
+} from '@/features/dashboard/adaptiveWidgetPageSize'
+import { DASHBOARD_GRID } from '@/features/dashboard/dashboardGridContract'
+import {
+  dashboardGridDragOption,
+  dashboardGridPreviewStyle,
+  dashboardGridResizeOption,
+  type DashboardGridPreview,
+} from '@/features/dashboard/dashboardGridInteraction'
 import {
   getDashboardWidgetExtension,
   getDashboardWidgetExtensions,
@@ -558,8 +640,10 @@ import {
   type TopReferrerItem,
   getProductFunnel,
   getProductRetention,
+  getCounters,
   type FunnelResponse,
   type RetentionResponse,
+  type CounterItem,
 } from '@/api/metrics'
 
 use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
@@ -593,6 +677,13 @@ const routeProjectId = computed(() => {
 
 const refreshing = ref(false)
 const isLayoutEditable = ref(false)
+const dashboardGridSpacing: [number, number] = [DASHBOARD_GRID.gap, DASHBOARD_GRID.gap]
+const dashboardGridStyle = {
+  '--dashboard-grid-column-pitch': `calc((100% - ${DASHBOARD_GRID.gap}px) / ${DASHBOARD_GRID.columns})`,
+  '--dashboard-grid-row-pitch': `${DASHBOARD_GRID.rowHeight + DASHBOARD_GRID.gap}px`,
+  '--dashboard-grid-offset': `${DASHBOARD_GRID.gap}px`,
+}
+const dashboardGridPreview = ref<DashboardGridPreview | null>(null)
 const dashboardSpaces = computed(() => dashboardSpacesForTemplate(
   selectedProject.value?.analysisTemplate ?? 'app',
 ))
@@ -707,10 +798,10 @@ const semanticEventCatalog = ref<EventCatalogEntry[]>([])
 const semanticDefinitions = ref<SemanticDefinition[]>([])
 
 // Paged Results
-const events = reactive<PagedResult<EventRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
-const devices = reactive<PagedResult<DeviceRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
-const sessions = reactive<PagedResult<SessionRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
-const traffic = reactive<PagedResult<TrafficMetricRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
+const events = reactive<PagedResult<EventRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
+const devices = reactive<PagedResult<DeviceRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
+const sessions = reactive<PagedResult<SessionRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
+const traffic = reactive<PagedResult<TrafficMetricRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
 
 // Dialogs & Form
 const widgetConfigDialogVisible = ref(false)
@@ -726,7 +817,13 @@ const widgetConfigForm = reactive({
   cohortEvent: '',
   returnEvent: '',
   retentionDaysText: '1, 7, 30',
+  overviewMetricKeys: [] as string[],
+  initialOverviewMetricKeys: [] as string[],
+  counterKeys: [] as string[],
+  initialCounterKeys: [] as string[],
 })
+const counterOptions = ref<CounterItem[]>([])
+const counterOptionsLoading = ref(false)
 const widgetConfigTarget = computed(() =>
   dashboardLayout.value.find((item) => item.i === widgetConfigTargetId.value),
 )
@@ -735,6 +832,50 @@ const widgetConfigMinHeight = computed(() => widgetConfigTarget.value?.minH || 2
 const activeSemanticDefinitions = computed(() => semanticDefinitions.value
   .filter((definition) => definition.isActive)
   .sort((left, right) => left.semanticKey.localeCompare(right.semanticKey)))
+const availableOverviewMetricKeySet = computed(() => new Set(
+  resolveOverviewMetricKeys(undefined, overview.value?.availableMetricKeys),
+))
+const overviewMetricSelectionOptions = computed<OrderedSelectionOption[]>(() =>
+  OVERVIEW_METRIC_CATALOG.map(metric => {
+    const available = availableOverviewMetricKeySet.value.has(metric.key)
+    return {
+      key: metric.key,
+      label: t(metric.labelKey),
+      description: t(metric.helpKey),
+      disabled: !available,
+      disabledReason: !available && metric.kind === 'business'
+        ? t('metrics.widgetConfig.semanticMappingRequired')
+        : undefined,
+    }
+  }),
+)
+
+const localizedCounterText = (value: Record<string, string> | string | null) => {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  const preferred = locale.value === 'zh'
+    ? ['zh-CN', 'zh', 'default', 'en']
+    : ['en', 'default', 'zh-CN', 'zh']
+  return preferred.map(key => value[key]).find(Boolean) || Object.values(value)[0] || ''
+}
+const counterSelectionOptions = computed<OrderedSelectionOption[]>(() => {
+  const availableOptions = counterOptions.value.map(counter => ({
+    key: counter.key,
+    label: localizedCounterText(counter.displayName) || counter.key,
+    description: counter.description || counter.key,
+  }))
+  const availableKeys = new Set(availableOptions.map(option => option.key))
+  const unavailableOptions = widgetConfigForm.initialCounterKeys
+    .filter(key => !availableKeys.has(key))
+    .map(key => ({
+      key,
+      label: key,
+      description: t('metrics.widgetConfig.unavailableCounterDescription'),
+      disabled: true,
+      disabledReason: t('metrics.widgetConfig.unavailableCounterKey'),
+    }))
+  return [...availableOptions, ...unavailableOptions]
+})
 
 // Loading States
 const overviewLoading = ref(false)
@@ -777,17 +918,25 @@ const semanticEventByRawKey = computed(() => {
   return entries
 })
 
-const eventDisplayName = (rawKey: string) => {
-  const names = semanticEventByRawKey.value.get(rawKey)?.displayName
-  if (!names) return rawKey
-  const preferred = locale.value === 'zh'
-    ? ['zh-CN', 'zh', 'default', 'en']
-    : ['en', 'default', 'zh-CN', 'zh']
-  for (const key of preferred) {
-    if (names[key]) return names[key]
+const semanticDefinitionByKey = computed(() => new Map(
+  semanticDefinitions.value.map((definition) => [definition.semanticKey, definition]),
+))
+
+const eventPresentation = (eventKey: string): SemanticEventPresentation => {
+  const catalogEntry = semanticEventByRawKey.value.get(eventKey)
+  const semanticKey = catalogEntry?.semanticKey || eventKey
+  const definition = semanticDefinitionByKey.value.get(semanticKey)
+  const displayName = definition?.displayName || catalogEntry?.displayName || null
+  return {
+    eventKey,
+    displayName,
+    description: definition?.description || catalogEntry?.description || null,
+    knownBusinessName: Boolean(displayName && Object.values(displayName).some(Boolean)),
   }
-  return Object.values(names)[0] || rawKey
 }
+const currentEventLegendEvents = computed(() =>
+  events.items.map(event => eventPresentation(event.eventType)),
+)
 const semanticDefinitionLabel = (definition: SemanticDefinition) => {
   const preferred = locale.value === 'zh'
     ? ['zh-CN', 'zh', 'default', 'en']
@@ -849,12 +998,29 @@ const removeWidget = (id: string) => {
 
 const resetToDefaultLayout = () => {
   dashboardLayout.value = cloneDashboardLayout(activeSpaceDefinition.value.defaultLayout)
+  void nextTick(handleLayoutUpdated)
 }
 
 const startLayoutEditing = () => {
   if (isLayoutEditable.value) return
   layoutBeforeEditing.value = JSON.parse(JSON.stringify(dashboardLayout.value))
   isLayoutEditable.value = true
+}
+
+const clearDashboardGridPreview = () => {
+  dashboardGridPreview.value = null
+}
+
+const handleDashboardGridMove = (id: string | number, x: number, y: number) => {
+  const item = dashboardLayout.value.find(candidate => candidate.i === String(id))
+  if (!item) return
+  dashboardGridPreview.value = { i: item.i, x, y, w: item.w, h: item.h }
+}
+
+const handleDashboardGridResize = (id: string | number, h: number, w: number) => {
+  const item = dashboardLayout.value.find(candidate => candidate.i === String(id))
+  if (!item) return
+  dashboardGridPreview.value = { i: item.i, x: item.x, y: item.y, w, h }
 }
 
 const cancelLayoutEditing = () => {
@@ -864,6 +1030,7 @@ const cancelLayoutEditing = () => {
   }
   layoutBeforeEditing.value = null
   isLayoutEditable.value = false
+  void nextTick(handleLayoutUpdated)
 }
 
 const availableWidgetTypes = computed(() => {
@@ -960,7 +1127,45 @@ const resetWidgetConfigForm = () => {
     cohortEvent: '',
     returnEvent: '',
     retentionDaysText: '1, 7, 30',
+    overviewMetricKeys: [],
+    initialOverviewMetricKeys: [],
+    counterKeys: [],
+    initialCounterKeys: [],
   })
+}
+
+const prepareOverviewMetricSelection = async (useAvailableDefaults: boolean) => {
+  if (!overview.value && filters.projectId) {
+    await loadOverview(beginTargetedRequestContext())
+  }
+  if (useAvailableDefaults && widgetConfigType.value === 'core.overview'
+    && widgetConfigForm.overviewMetricKeys.length === 0) {
+    widgetConfigForm.overviewMetricKeys = resolveOverviewMetricKeys(
+      undefined,
+      overview.value?.availableMetricKeys,
+    )
+  }
+}
+
+const loadCounterConfigurationOptions = async (selectAllWhenUnconfigured: boolean) => {
+  const projectId = filters.projectId
+  if (!projectId) return
+  counterOptionsLoading.value = true
+  try {
+    const response = await getCounters({ projectId })
+    if (filters.projectId !== projectId || widgetConfigType.value !== 'core.counters') return
+    counterOptions.value = response.data.data.items
+    if (selectAllWhenUnconfigured && widgetConfigForm.counterKeys.length === 0) {
+      widgetConfigForm.counterKeys = response.data.data.items.map(counter => counter.key)
+    }
+  } catch (error) {
+    if (filters.projectId === projectId) {
+      counterOptions.value = []
+      ElMessage.error(getErrorMessage(error, t('errors.countersFailed')))
+    }
+  } finally {
+    if (filters.projectId === projectId) counterOptionsLoading.value = false
+  }
 }
 
 const canConfigureWidget = (item: DashboardItem) => {
@@ -977,6 +1182,21 @@ const openWidgetConfig = (item: DashboardItem) => {
   widgetConfigForm.title = typeof item.config?.title === 'string' ? item.config.title : ''
   widgetConfigForm.width = item.w
   widgetConfigForm.height = item.h
+  if (type === 'core.overview') {
+    const configuredKeys = Array.isArray(item.config?.metricKeys)
+      ? item.config.metricKeys.filter(isOverviewMetricKey)
+      : []
+    widgetConfigForm.overviewMetricKeys = configuredKeys
+    widgetConfigForm.initialOverviewMetricKeys = [...configuredKeys]
+    void prepareOverviewMetricSelection(!Array.isArray(item.config?.metricKeys))
+  }
+  if (type === 'core.counters') {
+    widgetConfigForm.counterKeys = Array.isArray(item.config?.keys)
+      ? item.config.keys.filter((key): key is string => typeof key === 'string')
+      : []
+    widgetConfigForm.initialCounterKeys = [...widgetConfigForm.counterKeys]
+    void loadCounterConfigurationOptions(!Array.isArray(item.config?.keys))
+  }
   if (type === 'core.productFunnel') {
     widgetConfigForm.funnelSteps = Array.isArray(item.config?.steps)
       ? item.config.steps.filter((step): step is string => typeof step === 'string')
@@ -1001,12 +1221,15 @@ const addWidgetType = (type: string) => {
     appendExtensionWidget(type)
     return
   }
-  if (type === 'core.productFunnel' || type === 'core.retention') {
+  if (type === 'core.overview' || type === 'core.counters'
+    || type === 'core.productFunnel' || type === 'core.retention') {
     resetWidgetConfigForm()
     widgetConfigTargetId.value = ''
     widgetConfigType.value = type
     widgetConfigDialogVisible.value = true
-    void loadSemanticDefinitions()
+    if (type === 'core.overview') void prepareOverviewMetricSelection(true)
+    else if (type === 'core.counters') void loadCounterConfigurationOptions(false)
+    else void loadSemanticDefinitions()
     return
   }
   appendWidgetType(type)
@@ -1024,7 +1247,28 @@ const confirmConfiguredWidget = () => {
   const title = widgetConfigForm.title.trim()
   if (title) config.title = title
 
-  if (type === 'core.productFunnel') {
+  if (type === 'core.overview') {
+    const available = availableOverviewMetricKeySet.value
+    const initialKeys = new Set(widgetConfigForm.initialOverviewMetricKeys)
+    const metricKeys = [...new Set(widgetConfigForm.overviewMetricKeys)]
+      .filter(isOverviewMetricKey)
+    const newlyUnavailable = metricKeys.some(key => !available.has(key) && !initialKeys.has(key))
+    if (metricKeys.length < 1 || newlyUnavailable) {
+      ElMessage.warning(t('metrics.widgetConfig.invalidOverviewMetrics'))
+      return
+    }
+    config.metricKeys = metricKeys
+  } else if (type === 'core.counters') {
+    const existingKeys = new Set(counterOptions.value.map(counter => counter.key))
+    const initialKeys = new Set(widgetConfigForm.initialCounterKeys)
+    const keys = [...new Set(widgetConfigForm.counterKeys)]
+    const newlyUnavailable = keys.some(key => !existingKeys.has(key) && !initialKeys.has(key))
+    if (keys.length < 1 || keys.length > 20 || newlyUnavailable) {
+      ElMessage.warning(t('metrics.widgetConfig.invalidCounterKeys'))
+      return
+    }
+    config.keys = keys
+  } else if (type === 'core.productFunnel') {
     const steps = [...new Set(widgetConfigForm.funnelSteps.map((step) => step.trim()).filter(Boolean))]
     if (steps.length < 2 || steps.length > 12 || steps.some((step) => !validAnalyticsKey(step))) {
       ElMessage.warning(t('metrics.widgetConfig.invalidFunnelSteps'))
@@ -1075,6 +1319,7 @@ const confirmConfiguredWidget = () => {
       item.x = Math.min(item.x, 12 - item.w)
     }
     syncAnalyticsConfigFromLayout()
+    syncAdaptivePageSizes()
     widgetConfigTargetId.value = ''
     void nextTick(() => refreshAll())
     return
@@ -1289,6 +1534,27 @@ const updateExtensionWidgetConfig = (item: DashboardItem, config: unknown) => {
 const configForWidget = (type: string): Record<string, unknown> =>
   dashboardLayout.value.find((item) => resolvedWidgetType(item) === type)?.config || {}
 
+const pageSizeForWidget = (type: string) => {
+  const item = dashboardLayout.value.find((candidate) => resolvedWidgetType(candidate) === type)
+  return item ? adaptiveWidgetPageSize(type, item.h) : null
+}
+
+const syncAdaptivePageSizes = () => {
+  const changed: string[] = []
+  const sync = (type: string, result: PagedResult<unknown>) => {
+    const pageSize = pageSizeForWidget(type)
+    if (pageSize === null || result.pageSize === pageSize) return
+    result.page = 1
+    result.pageSize = pageSize
+    changed.push(type)
+  }
+  sync('core.events', events)
+  sync('core.devices', devices)
+  sync('core.sessions', sessions)
+  sync('core.traffic', traffic)
+  return changed
+}
+
 const getWidgetLabel = (item: DashboardItem) => {
   if (typeof item.config?.title === 'string' && item.config.title.trim()) {
     return item.config.title.trim()
@@ -1325,6 +1591,7 @@ const toServerDefinition = (): DashboardDefinition | null => {
       return null
     }
     let config = item.config ?? widgetConfig(type)
+    config = withoutLegacyFixedPageSize(type, config)
     if (extension) {
       if (config === undefined && extension.configRequired) return null
       if (config !== undefined) {
@@ -1431,7 +1698,7 @@ const formatJson = (value: Record<string, unknown> | null) => {
   try { return JSON.stringify(value) } catch { return '-' }
 }
 
-const overviewItems = computed(() => {
+const overviewMetricValues = computed<Partial<Record<OverviewMetricKey, string>>>(() => {
   if (!overview.value) return {}
   const leadingVersion = findTopActiveAppVersion(appVersions.value?.items ?? [])
   const leadingVersionLabel = appVersionsFailed.value
@@ -1440,11 +1707,36 @@ const overviewItems = computed(() => {
       ? `v${leadingVersion.appVersion}`
       : '—'
   return {
-    [t('metrics.overviewItems.devicesActive')]: formatNumber(overview.value.devicesActive),
-    [t('metrics.overviewItems.usersActive')]: formatNumber(overview.value.usersActive),
-    [t('metrics.overviewItems.eventsTotal')]: formatNumber(overview.value.eventsTotal),
-    [t('metrics.overviewItems.topAppVersion')]: leadingVersionLabel,
+    [OVERVIEW_METRIC_KEYS.activeDevices]: formatNumber(overview.value.devicesActive),
+    [OVERVIEW_METRIC_KEYS.activeActors]: formatNumber(overview.value.usersActive),
+    [OVERVIEW_METRIC_KEYS.eventOccurrences]: formatNumber(overview.value.eventsTotal),
+    [OVERVIEW_METRIC_KEYS.topActiveAppVersion]: leadingVersionLabel,
+    [OVERVIEW_METRIC_KEYS.accountCreated]: formatNumber(overview.value.cloudAccountsCreated),
+    [OVERVIEW_METRIC_KEYS.accountRecreated]: formatNumber(overview.value.cloudAccountsRecreated),
   }
+})
+
+const overviewItemsForWidget = (item: DashboardItem) => {
+  if (!overview.value) return []
+  const metricByKey = new Map(OVERVIEW_METRIC_CATALOG.map(metric => [metric.key, metric]))
+  return resolveOverviewMetricKeys(item.config?.metricKeys, overview.value.availableMetricKeys)
+    .flatMap(key => {
+      const metric = metricByKey.get(key)
+      const value = overviewMetricValues.value[key]
+      return metric && value !== undefined ? [{
+        key,
+        label: t(metric.labelKey),
+        value,
+        help: t(metric.helpKey),
+      }] : []
+    })
+}
+const businessTrendsHelp = computed(() => {
+  const available = new Set(resolveTrendMetricKeys(trends.value?.availableMetricKeys))
+  return available.has(OVERVIEW_METRIC_KEYS.accountCreated)
+    || available.has(OVERVIEW_METRIC_KEYS.accountRecreated)
+    ? t('metrics.help.trendsWithAccounts')
+    : t('metrics.help.trendsActivityOnly')
 })
 
 const trafficOverviewItems = computed(() => {
@@ -1475,6 +1767,10 @@ const productFunnelRows = computed(() => {
 const productFunnelCountLabel = computed(() =>
   productFunnel.value?.countingUnit === 'journeys' ? t('tables.journeys') : t('tables.users'),
 )
+
+const funnelGroupLabel = (groupKey: string) => dashboardAnalyticsConfig.value.funnel?.groupBy
+  ? groupKey
+  : t('tables.allUsers')
 
 // --- 6. Metric Loading Functions ---
 const loadOverview = async (context: ProjectRequestContext = captureProjectContext()) => {
@@ -1569,7 +1865,8 @@ const loadSemanticEventCatalog = async (context: ProjectRequestContext = capture
 const loadEvents = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
   const config = configForWidget('core.events')
-  const pageSize = typeof config.pageSize === 'number' ? config.pageSize : events.pageSize
+  const pageSize = pageSizeForWidget('core.events') ?? events.pageSize
+  events.pageSize = pageSize
   const eventType = typeof config.eventType === 'string' ? config.eventType : context.snapshot.eventType
   eventsLoading.value = true
   try {
@@ -1585,8 +1882,8 @@ const loadEvents = async (context: ProjectRequestContext = captureProjectContext
 
 const loadDevices = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
-  const config = configForWidget('core.devices')
-  const pageSize = typeof config.pageSize === 'number' ? config.pageSize : devices.pageSize
+  const pageSize = pageSizeForWidget('core.devices') ?? devices.pageSize
+  devices.pageSize = pageSize
   devicesLoading.value = true
   try {
     const res = await getDevices(cleanParams({ projectId: context.projectId, page: context.snapshot.devicesPage, pageSize, deviceId: context.snapshot.deviceId, apiKey: context.snapshot.apiKey, isBanned: context.snapshot.isBanned === '' ? undefined : context.snapshot.isBanned === 'true', ...rangeParams(context.snapshot) }))
@@ -1601,8 +1898,8 @@ const loadDevices = async (context: ProjectRequestContext = captureProjectContex
 
 const loadSessions = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
-  const config = configForWidget('core.sessions')
-  const pageSize = typeof config.pageSize === 'number' ? config.pageSize : sessions.pageSize
+  const pageSize = pageSizeForWidget('core.sessions') ?? sessions.pageSize
+  sessions.pageSize = pageSize
   sessionsLoading.value = true
   try {
     const res = await getSessions(cleanParams({ projectId: context.projectId, page: context.snapshot.sessionsPage, pageSize, sessionId: context.snapshot.sessionId, userId: context.snapshot.userId, deviceId: context.snapshot.deviceId, ...rangeParams(context.snapshot) }))
@@ -1683,8 +1980,8 @@ const loadTopReferrers = async (context: ProjectRequestContext = captureProjectC
 
 const loadTraffic = async (context: ProjectRequestContext = captureProjectContext()) => {
   if (!requireProject()) return
-  const config = configForWidget('core.traffic')
-  const pageSize = typeof config.pageSize === 'number' ? config.pageSize : traffic.pageSize
+  const pageSize = pageSizeForWidget('core.traffic') ?? traffic.pageSize
+  traffic.pageSize = pageSize
   trafficLoading.value = true
   try {
     const res = await getTrafficMetrics(cleanParams({ projectId: context.projectId, page: context.snapshot.trafficPage, pageSize, userId: context.snapshot.userId, deviceId: context.snapshot.deviceId, sessionId: context.snapshot.sessionId, ...rangeParams(context.snapshot) }))
@@ -1872,6 +2169,21 @@ const handleResize = () => {
   })
 }
 
+const handleLayoutUpdated = () => {
+  clearDashboardGridPreview()
+  handleResize()
+  const changedTypes = syncAdaptivePageSizes()
+  if (!filters.projectId || changedTypes.length === 0) return
+  const context = beginTargetedRequestContext()
+  for (const type of changedTypes) {
+    if (!dashboardLayout.value.some((item) => resolvedWidgetType(item) === type)) continue
+    if (type === 'core.events') void loadEvents(context)
+    else if (type === 'core.devices') void loadDevices(context)
+    else if (type === 'core.sessions') void loadSessions(context)
+    else if (type === 'core.traffic') void loadTraffic(context)
+  }
+}
+
 const formatTrendAxisLabel = (value: string, granularity: TrafficGranularity) => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value
@@ -1899,34 +2211,66 @@ const updateBusinessTrendsChart = () => {
   const chart = chartInstances[id] || initChart(id)
   if (!chart || !trends.value) return
 
+  const available = new Set(resolveTrendMetricKeys(trends.value.availableMetricKeys))
+  const series = [
+    available.has(OVERVIEW_METRIC_KEYS.activeActors) ? {
+      name: t('metrics.chart.activeUsers'),
+      type: 'line',
+      smooth: true,
+      data: trends.value.points.map(p => p.activeUsers),
+      color: '#0071e3',
+      areaStyle: { opacity: 0.1 },
+    } : null,
+    available.has(OVERVIEW_METRIC_KEYS.activeDevices) ? {
+      name: t('metrics.chart.activeDevices'),
+      type: 'line',
+      smooth: true,
+      data: trends.value.points.map(p => p.activeDevices),
+      color: '#ff9500',
+      areaStyle: { opacity: 0.1 },
+    } : null,
+    available.has(OVERVIEW_METRIC_KEYS.accountCreated) ? {
+      name: t('metrics.chart.cloudAccountsCreated'),
+      type: 'line',
+      smooth: true,
+      yAxisIndex: 1,
+      data: trends.value.points.map(p => p.cloudAccountsCreated),
+      color: '#34c759',
+    } : null,
+    available.has(OVERVIEW_METRIC_KEYS.accountRecreated) ? {
+      name: t('metrics.chart.cloudAccountsRecreated'),
+      type: 'line',
+      smooth: true,
+      yAxisIndex: 1,
+      lineStyle: { type: 'dashed' },
+      data: trends.value.points.map(p => p.cloudAccountsRecreated),
+      color: '#af52de',
+    } : null,
+  ].filter((item): item is NonNullable<typeof item> => item !== null)
+  const hasAccountSeries = series.some(item => item.yAxisIndex === 1)
   const option = {
     tooltip: { trigger: 'axis' },
-    legend: { data: [t('metrics.chart.events'), t('metrics.chart.activeDevices')], bottom: 0 },
-    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+    legend: {
+      data: series.map(item => item.name),
+      bottom: 0,
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '15%',
+      outerBoundsMode: 'same',
+      outerBoundsContain: 'axisLabel',
+    },
     xAxis: {
       type: 'category',
       boundaryGap: false,
       data: trends.value.points.map((point) => formatTrendAxisLabel(point.time, trends.value!.granularity))
     },
-    yAxis: { type: 'value' },
-    series: [
-      {
-        name: t('metrics.chart.events'),
-        type: 'line',
-        smooth: true,
-        data: trends.value.points.map(p => p.events),
-        color: '#0071e3',
-        areaStyle: { opacity: 0.1 }
-      },
-      {
-        name: t('metrics.chart.activeDevices'),
-        type: 'line',
-        smooth: true,
-        data: trends.value.points.map(p => p.activeDevices),
-        color: '#ff9500',
-        areaStyle: { opacity: 0.1 }
-      }
-    ]
+    yAxis: hasAccountSeries ? [
+      { type: 'value', name: t('metrics.chart.activityAxis') },
+      { type: 'value', name: t('metrics.chart.accountAxis'), splitLine: { show: false } },
+    ] : { type: 'value', name: t('metrics.chart.activityAxis') },
+    series,
   }
   chart.setOption(option)
 }
@@ -1941,7 +2285,13 @@ const updateTrafficTrendsChart = () => {
   const option = {
     tooltip: { trigger: 'axis' },
     legend: { data: [t('metrics.chart.pageViews'), t('metrics.chart.visitors')], bottom: 0 },
-    grid: { left: '3%', right: '4%', bottom: '15%', containLabel: true },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '15%',
+      outerBoundsMode: 'same',
+      outerBoundsContain: 'axisLabel',
+    },
     xAxis: {
       type: 'category',
       boundaryGap: false,
@@ -2009,10 +2359,10 @@ const clearProjectScopedState = () => {
   widgetConfigDialogVisible.value = false
   widgetConfigType.value = ''
   widgetConfigTargetId.value = ''
-  Object.assign(events, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
-  Object.assign(devices, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
-  Object.assign(sessions, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
-  Object.assign(traffic, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 50, total: 0, items: [] })
+  Object.assign(events, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
+  Object.assign(devices, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
+  Object.assign(sessions, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
+  Object.assign(traffic, { projectId: filters.projectId, rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
   clearLoadingStates()
 }
 
@@ -2079,6 +2429,7 @@ const activateWorkspace = async (projectChanged: boolean) => {
     || space !== activeSpace.value) return
 
   resetPages()
+  syncAdaptivePageSizes()
   commitFilterSnapshot()
   layoutVisible.value = true
   await nextTick()
@@ -2122,6 +2473,7 @@ watch(trafficTrends, () => nextTick(updateTrafficTrendsChart))
 
 watch(isLayoutEditable, (val) => {
   if (!val) {
+    clearDashboardGridPreview()
     nextTick(handleResize)
   }
 })
@@ -2175,13 +2527,42 @@ onUnmounted(() => {
 .workspace-area.is-editing {
   background: #f5f5f7;
   border-color: rgba(0, 0, 0, 0.1);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .dashboard-grid {
   transition: all 0.3s ease;
 }
 
+.workspace-area.is-editing .dashboard-grid {
+  background-image: radial-gradient(
+    circle,
+    rgba(0, 113, 227, 0.28) 1px,
+    transparent 1.5px
+  );
+  background-position: var(--dashboard-grid-offset) var(--dashboard-grid-offset);
+  background-size:
+    var(--dashboard-grid-column-pitch)
+    var(--dashboard-grid-row-pitch);
+}
+
+.workspace-area.is-editing :deep(.vue-grid-placeholder) {
+  display: none !important;
+}
+
+.dashboard-grid-drop-preview {
+  position: absolute;
+  z-index: 110;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: rgba(0, 113, 227, 0.1);
+  border: 2px dashed rgba(0, 113, 227, 0.72);
+  border-radius: 10px;
+}
+
 .grid-item-card {
+  box-sizing: border-box;
   background: white;
   border-radius: 10px;
   border: 1px solid rgba(0, 0, 0, 0.1);
@@ -2195,6 +2576,7 @@ onUnmounted(() => {
   border-color: #0071e3;
   box-shadow: 0 0 0 1px rgba(0, 113, 227, 0.14), 0 4px 16px rgba(0, 0, 0, 0.08);
   z-index: 100;
+  touch-action: none;
 }
 
 :deep(.vue-resizable-handle) {
@@ -2218,6 +2600,7 @@ onUnmounted(() => {
   bottom: -7px;
   right: -7px;
   cursor: nwse-resize;
+  touch-action: none;
 }
 
 
@@ -2237,6 +2620,15 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   cursor: default;
+}
+
+.grid-item-card.is-editing .widget-header-bar {
+  cursor: grab;
+  touch-action: none;
+}
+
+.grid-item-card.is-editing .widget-header-bar:active {
+  cursor: grabbing;
 }
 
 .widget-drag-handle {
@@ -2323,7 +2715,7 @@ onUnmounted(() => {
 /* Overview Widget Styling */
 .overview-grid-compact {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   padding: 4px;
 }
@@ -2346,6 +2738,10 @@ onUnmounted(() => {
 }
 
 .mini-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   font-size: 12px;
   color: #909399;
   margin-bottom: 4px;
