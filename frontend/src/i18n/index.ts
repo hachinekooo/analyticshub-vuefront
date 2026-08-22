@@ -397,6 +397,11 @@ const messages = {
         pageScope: 'Deduplicated for this page',
         unmapped: 'This event does not have a business description yet. Add one in the Metric Dictionary when needed.',
       },
+      eventProperties: {
+        title: 'Event Properties',
+        completeHint: 'Complete JSON',
+        openComplete: 'View complete formatted event properties',
+      },
       topPages: 'Top Pages',
       topReferrers: 'Top Referrers',
     },
@@ -1065,6 +1070,11 @@ const messages = {
         title: '事件说明',
         pageScope: '按本页事件类型去重',
         unmapped: '该事件暂未配置业务说明；需要时可前往“指标字典”补充。',
+      },
+      eventProperties: {
+        title: '事件属性',
+        completeHint: '完整 JSON',
+        openComplete: '查看格式化后的完整事件属性',
       },
       topPages: '热门页面',
       topReferrers: '热门来源',

@@ -279,8 +279,10 @@
                          <template #default="{ row }">{{ formatTimestamp(row.eventTimestamp) }}</template>
                       </el-table-column>
                       <el-table-column prop="userId" :label="t('tables.userId')" min-width="120" show-overflow-tooltip />
-                      <el-table-column prop="properties" :label="t('tables.properties')" min-width="200" show-overflow-tooltip>
-                         <template #default="{ row }">{{ formatJson(row.properties) }}</template>
+                      <el-table-column prop="properties" :label="t('tables.properties')" min-width="240">
+                         <template #default="{ row }">
+                           <EventPropertiesPreview :value="row.properties" />
+                         </template>
                       </el-table-column>
                    </el-table>
                    <div class="widget-footer-mini">
@@ -549,6 +551,7 @@ import AppVersionDistribution from '@/components/metrics/AppVersionDistribution.
 import MetricHelpIcon from '@/components/metrics/MetricHelpIcon.vue'
 import SemanticEventLabel from '@/components/metrics/SemanticEventLabel.vue'
 import EventLegendPopover from '@/components/metrics/EventLegendPopover.vue'
+import EventPropertiesPreview from '@/components/metrics/EventPropertiesPreview.vue'
 import OrderedSelectionEditor, { type OrderedSelectionOption } from '@/components/metrics/OrderedSelectionEditor.vue'
 import CounterDisplayWidget from '@/features/counters/CounterDisplayWidget.vue'
 import { useProjectContextStore } from '@/stores/projectContext'
@@ -1691,11 +1694,6 @@ const formatDuration = (value: number) => {
 const formatPercent = (value: number) => {
   if (!Number.isFinite(value)) return '-'
   return `${(value * 100).toFixed(1)}%`
-}
-
-const formatJson = (value: Record<string, unknown> | null) => {
-  if (!value) return '-'
-  try { return JSON.stringify(value) } catch { return '-' }
 }
 
 const overviewMetricValues = computed<Partial<Record<OverviewMetricKey, string>>>(() => {

@@ -40,7 +40,15 @@ const projects = [
 ]
 
 const eventRows = [
-  ['evt-1001', 'letter_created', 'user-001', 'device-ios-001', 'session-001', -5 * 60000, { source: 'composer', template: 'classic' }],
+  ['evt-1001', 'letter_created', 'user-001', 'device-ios-001', 'session-001', -5 * 60000, {
+    authoring_mode: 'full',
+    entry_point: 'canvas_border_style',
+    stationery: {
+      template_id: 'classic_letterpaper',
+      selected_resources: ['premium_border_01', 'opening_effect_soft_light'],
+    },
+    trial_context: { grant_type: 'usage_count', remaining_before_save: 2 },
+  }],
   ['evt-1002', 'letter_shared', 'user-001', 'device-ios-001', 'session-001', -4 * 60000, { channel: 'image' }],
   ['evt-1003', 'subscription_viewed', 'user-002', 'device-ios-002', 'session-002', -50 * 60000, { placement: 'settings' }],
   ['evt-1004', 'letter_done_v2', 'user-003', 'device-ios-003', 'session-003', -2 * 3600000, { source: 'quick_action' }],
