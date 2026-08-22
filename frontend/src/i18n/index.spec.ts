@@ -75,4 +75,24 @@ describe('i18n locale resolution and fallback', () => {
       for (const key of keys) expect(t(key)).not.toBe(key)
     }
   })
+
+  it('keeps project template scope and switching impact localized', async () => {
+    const { setLocale, t } = await importI18n()
+    const keys = [
+      'projectTemplates.app',
+      'projectTemplates.appDescription',
+      'projectTemplates.website',
+      'projectTemplates.websiteDescription',
+      'projectTemplates.webapp',
+      'projectTemplates.webappDescription',
+      'projectWizard.templateDescription',
+      'projectWizard.templateCreateHint',
+      'projectWizard.templateEditHint',
+    ]
+
+    for (const language of ['zh', 'en'] as const) {
+      setLocale(language)
+      for (const key of keys) expect(t(key)).not.toBe(key)
+    }
+  })
 })

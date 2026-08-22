@@ -14,6 +14,10 @@ const ButtonStub = defineComponent({
   emits: ['click'],
   template: '<button type="button" @click="$emit(\'click\')"><slot /></button>',
 })
+const AlertStub = defineComponent({
+  props: ['title'],
+  template: '<div class="alert-stub">{{ title }}</div>',
+})
 
 const project: Project = {
   id: 7,
@@ -43,6 +47,7 @@ const mountDialog = () => mount(ProjectFormDialog, {
       ElInput: true,
       ElInputNumber: true,
       ElSwitch: true,
+      ElAlert: AlertStub,
     },
   },
 })
@@ -75,5 +80,17 @@ describe('ProjectFormDialog', () => {
       analysisTemplate: 'app',
       dbSchema: 'analytics',
     })
+  })
+
+  it('explains combined app and website analysis without implying data migration', async () => {
+    const wrapper = mountDialog()
+
+    await clickNext(wrapper)
+
+    expect(wrapper.text()).toContain('APP + 官网（组合分析）')
+    expect(wrapper.text()).toContain('同一个 Project 同时接收 APP 产品事件与官网访问流量')
+    expect(wrapper.text()).toContain('模板只决定工作台可用组件和默认布局')
+    expect(wrapper.text()).toContain('切换模板不会迁移或删除数据')
+    expect(wrapper.text()).toContain('不会覆盖已保存布局')
   })
 })

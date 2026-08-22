@@ -128,6 +128,13 @@ const back = () => {
       <section v-else-if="step === 2">
         <h3>{{ t('projectWizard.templateTitle') }}</h3>
         <p>{{ t('projectWizard.templateDescription') }}</p>
+        <el-alert
+          class="template-guidance"
+          type="info"
+          :closable="false"
+          show-icon
+          :title="t(isEdit ? 'projectWizard.templateEditHint' : 'projectWizard.templateCreateHint')"
+        />
         <div class="template-grid">
           <button
             v-for="template in templates"
@@ -223,6 +230,7 @@ const back = () => {
 .project-form section { min-height: 310px; }
 .project-form h3 { margin: 0 0 6px; font-size: 19px; }
 .project-form section > p { margin: 0 0 20px; color: #6e6e73; font-size: 13px; line-height: 1.5; }
+.template-guidance { margin: -6px 0 16px; }
 .template-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .template-grid button { min-height: 126px; padding: 16px; text-align: left; border: 1px solid #d2d2d7; border-radius: 12px; background: #fafafa; cursor: pointer; }
 .template-grid button:hover { border-color: #8fc7ff; }
