@@ -11,6 +11,7 @@ const mountBar = (space: 'overview' | 'details') => shallowMount(MetricsControlB
     dateRange: null,
     granularity: 'day',
     userId: '',
+    resolvedActorId: '',
     deviceId: '',
     refreshing: false,
     editing: false,
@@ -19,8 +20,8 @@ const mountBar = (space: 'overview' | 'details') => shallowMount(MetricsControlB
     stubs: {
       ElButton: true,
       ElIcon: true,
-      ElForm: true,
-      ElFormItem: true,
+      ElForm: { template: '<form><slot /></form>' },
+      ElFormItem: { props: ['label'], template: '<label>{{ label }}<slot /></label>' },
       ElDatePicker: true,
       ElSelect: true,
       ElOption: true,
@@ -41,8 +42,20 @@ describe('MetricsControlBar', () => {
     expect(wrapper.find('.filter-section').classes()).toContain('combined-filters')
     expect(wrapper.find('.filter-divider').exists()).toBe(true)
     expect(wrapper.findAll('.filter-group')).toHaveLength(2)
+    expect(wrapper.text()).toContain('事件归一身份')
     expect(wrapper.text()).not.toContain('官网')
     expect(wrapper.text()).not.toContain('App')
+  })
+
+  it('emits the resolved actor entered for the event journey filter', () => {
+    const wrapper = mountBar('details')
+    const inputs = wrapper.findAllComponents({ name: 'ElInput' })
+
+    inputs[1]?.vm.$emit('update:modelValue', '22222222-2222-4222-8222-222222222222')
+
+    expect(wrapper.emitted('update:resolvedActorId')).toEqual([
+      ['22222222-2222-4222-8222-222222222222'],
+    ])
   })
 
   it('keeps the normal dashboard filter section compact without a divider', () => {

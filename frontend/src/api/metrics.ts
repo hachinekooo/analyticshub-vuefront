@@ -85,6 +85,9 @@ export type EventRecord = {
   createdAt: string
   deviceId: string
   userId: string | null
+  resolvedActorId: string | null
+  identityScope: string | null
+  actorLinked: boolean
   sessionId: string | null
   properties: Record<string, unknown> | null
 }
@@ -306,6 +309,7 @@ export const getEvents = (params: {
   pageSize?: number
   eventType?: string
   userId?: string
+  resolvedActorId?: string
   deviceId?: string
 }) => {
   return request.get<ApiResponse<PagedResult<EventRecord>>>('/admin/events', { params })

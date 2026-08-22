@@ -10,6 +10,7 @@ const props = defineProps<{
   dateRange: string[] | null
   granularity: MetricsGranularity
   userId: string
+  resolvedActorId: string
   deviceId: string
   refreshing: boolean
   editing: boolean
@@ -20,6 +21,7 @@ const emit = defineEmits<{
   'update:dateRange': [value: string[] | null]
   'update:granularity': [value: MetricsGranularity]
   'update:userId': [value: string]
+  'update:resolvedActorId': [value: string]
   'update:deviceId': [value: string]
   apply: []
   customize: []
@@ -104,6 +106,14 @@ const isDetailSpace = computed(() => props.spaces.find((item) => item.key === pr
               clearable
               :placeholder="t('filters.placeholders.userId')"
               @update:model-value="emit('update:userId', $event)"
+            />
+          </el-form-item>
+          <el-form-item :label="t('filters.resolvedActorId')">
+            <el-input
+              :model-value="resolvedActorId"
+              clearable
+              :placeholder="t('filters.placeholders.resolvedActorId')"
+              @update:model-value="emit('update:resolvedActorId', $event)"
             />
           </el-form-item>
           <el-form-item :label="t('filters.deviceId')">

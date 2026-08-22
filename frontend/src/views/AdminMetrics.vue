@@ -8,6 +8,7 @@
       :date-range="filters.dateRange"
       :granularity="filters.granularity"
       :user-id="filters.userId"
+      :resolved-actor-id="filters.resolvedActorId"
       :device-id="filters.deviceId"
       :refreshing="refreshing"
       :editing="isLayoutEditable"
@@ -15,6 +16,7 @@
       @update:date-range="filters.dateRange = $event"
       @update:granularity="filters.granularity = $event"
       @update:user-id="filters.userId = $event"
+      @update:resolved-actor-id="filters.resolvedActorId = $event"
       @update:device-id="filters.deviceId = $event"
       @apply="applyFilters"
       @customize="startLayoutEditing"
@@ -278,7 +280,33 @@
                       <el-table-column prop="eventTimestamp" :label="t('tables.eventTime')" min-width="160">
                          <template #default="{ row }">{{ formatTimestamp(row.eventTimestamp) }}</template>
                       </el-table-column>
-                      <el-table-column prop="userId" :label="t('tables.userId')" min-width="120" show-overflow-tooltip />
+                      <el-table-column :label="t('tables.analyticsIdentity')" min-width="220">
+                        <template #header>
+                          <span>{{ t('tables.analyticsIdentity') }}</span>
+                          <el-tooltip :content="t('metrics.analyticsIdentity.help')" placement="top">
+                            <el-icon class="table-header-help" tabindex="0"><InfoFilled /></el-icon>
+                          </el-tooltip>
+                        </template>
+                        <template #default="{ row }">
+                          <div class="analytics-identity-cell">
+                            <code>{{ row.resolvedActorId || row.userId || '—' }}</code>
+                            <div class="analytics-identity-meta">
+                              <el-tag size="small" effect="plain">
+                                {{ identityScopeLabel(row.identityScope) }}
+                              </el-tag>
+                              <el-tooltip
+                                v-if="row.actorLinked"
+                                :content="t('metrics.analyticsIdentity.linkedHelp', { rawActor: row.userId })"
+                                placement="top"
+                              >
+                                <el-tag size="small" type="success" effect="plain">
+                                  {{ t('metrics.analyticsIdentity.linked') }}
+                                </el-tag>
+                              </el-tooltip>
+                            </div>
+                          </div>
+                        </template>
+                      </el-table-column>
                       <el-table-column prop="properties" :label="t('tables.properties')" min-width="240">
                          <template #default="{ row }">
                            <EventPropertiesPreview :value="row.properties" />
@@ -610,6 +638,7 @@ import {
 } from '@/api/dashboard'
 import {
   Close,
+  InfoFilled,
   Rank,
   Setting,
 } from '@element-plus/icons-vue'
@@ -648,6 +677,7 @@ import {
   type RetentionResponse,
   type CounterItem,
 } from '@/api/metrics'
+import { buildEventRecordQuery } from '@/features/metrics/eventRecordQuery'
 
 use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
@@ -705,6 +735,7 @@ const filters = reactive({
   topEventsLimit: 10,
   eventType: '',
   userId: '',
+  resolvedActorId: '',
   deviceId: '',
   sessionId: '',
   apiKey: '',
@@ -718,6 +749,7 @@ type MetricsRequestSnapshot = Readonly<{
   topEventsLimit: number
   eventType: string
   userId: string
+  resolvedActorId: string
   deviceId: string
   sessionId: string
   apiKey: string
@@ -745,6 +777,7 @@ const captureFilterSnapshot = (): AppliedMetricsFilters => ({
   topEventsLimit: filters.topEventsLimit,
   eventType: filters.eventType,
   userId: filters.userId,
+  resolvedActorId: filters.resolvedActorId,
   deviceId: filters.deviceId,
   sessionId: filters.sessionId,
   apiKey: filters.apiKey,
@@ -1681,6 +1714,12 @@ const formatTimestamp = (value: number) => {
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
 }
 
+const identityScopeLabel = (scope: string | null) => {
+  if (scope === 'anonymous') return t('metrics.analyticsIdentity.anonymous')
+  if (scope === 'cloud_account') return t('metrics.analyticsIdentity.cloudAccount')
+  return t('metrics.analyticsIdentity.unknown')
+}
+
 const formatDuration = (value: number) => {
   if (!value || value <= 0) return '0s'
   const seconds = Math.floor(value / 1000)
@@ -1868,7 +1907,16 @@ const loadEvents = async (context: ProjectRequestContext = captureProjectContext
   const eventType = typeof config.eventType === 'string' ? config.eventType : context.snapshot.eventType
   eventsLoading.value = true
   try {
-    const res = await getEvents(cleanParams({ projectId: context.projectId, page: context.snapshot.eventsPage, pageSize, eventType, userId: context.snapshot.userId, deviceId: context.snapshot.deviceId, ...rangeParams(context.snapshot) }))
+    const res = await getEvents(buildEventRecordQuery({
+      projectId: context.projectId,
+      page: context.snapshot.eventsPage,
+      pageSize,
+      eventType,
+      userId: context.snapshot.userId,
+      resolvedActorId: context.snapshot.resolvedActorId,
+      deviceId: context.snapshot.deviceId,
+      ...rangeParams(context.snapshot),
+    }))
     if (!isCurrentProjectContext(context)) return
     Object.assign(events, res.data.data)
   } catch (error) {
@@ -2388,6 +2436,7 @@ const disposeWorkspaceCharts = () => {
 const resetProjectDetailFilters = () => {
   filters.dateRange = null
   filters.userId = ''
+  filters.resolvedActorId = ''
   filters.deviceId = ''
   filters.sessionId = ''
   filters.apiKey = ''
@@ -2678,6 +2727,34 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 12px;
   font-weight: 600;
+}
+
+.table-header-help {
+  margin-left: 5px;
+  color: var(--el-text-color-secondary);
+  cursor: help;
+  vertical-align: middle;
+}
+
+.analytics-identity-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.analytics-identity-cell code {
+  overflow: hidden;
+  color: var(--el-text-color-primary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-identity-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 /* Scrollbar for widgets */
