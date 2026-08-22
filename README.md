@@ -47,4 +47,4 @@ pnpm check
 
 开发中可分别使用 `pnpm test` / `pnpm test:watch` / `pnpm lint:check` / `pnpm type-check` / `pnpm build`。工作区实现边界见 [`docs/PROJECT_WORKSPACE.md`](docs/PROJECT_WORKSPACE.md)，前端生产变量、构建产物和页面验收见 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)。
 
-GitHub Actions 在每次相关 push / pull request 中执行同一个 `pnpm check`，不包含发布或部署步骤。
+仓库不启用托管 CI；维护者在提交和发布前于受控本地环境执行 `pnpm check`，构建产物仍通过既有人工发布流程部署。
