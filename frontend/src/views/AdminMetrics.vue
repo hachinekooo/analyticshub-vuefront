@@ -312,6 +312,13 @@
                            <EventPropertiesPreview :value="row.properties" />
                          </template>
                       </el-table-column>
+                      <el-table-column :label="t('buttons.actions')" width="108" fixed="right">
+                        <template #default="{ row }">
+                          <el-button link type="primary" @click="openUserJourney(row)">
+                            {{ t('metrics.userJourney.view') }}
+                          </el-button>
+                        </template>
+                      </el-table-column>
                    </el-table>
                    <div class="widget-footer-mini">
                       <el-pagination
@@ -558,6 +565,20 @@
       </template>
     </el-dialog>
 
+    <UserJourneyDrawer
+      :model-value="userJourneyVisible"
+      :anchor-event="userJourneyAnchor"
+      :journey="userJourney"
+      :loading="userJourneyLoading"
+      :window-key="userJourneyWindow"
+      :properties-loading-event-ids="userJourneyPropertiesLoading"
+      :present-event="eventPresentation"
+      @update:model-value="setUserJourneyVisible"
+      @update:window-key="updateUserJourneyWindow"
+      @reload="loadUserJourney"
+      @load-properties="loadUserJourneyEventProperties"
+    />
+
   </div>
 </template>
 
@@ -580,6 +601,7 @@ import MetricHelpIcon from '@/components/metrics/MetricHelpIcon.vue'
 import SemanticEventLabel from '@/components/metrics/SemanticEventLabel.vue'
 import EventLegendPopover from '@/components/metrics/EventLegendPopover.vue'
 import EventPropertiesPreview from '@/components/metrics/EventPropertiesPreview.vue'
+import UserJourneyDrawer from '@/components/metrics/UserJourneyDrawer.vue'
 import OrderedSelectionEditor, { type OrderedSelectionOption } from '@/components/metrics/OrderedSelectionEditor.vue'
 import CounterDisplayWidget from '@/features/counters/CounterDisplayWidget.vue'
 import { useProjectContextStore } from '@/stores/projectContext'
@@ -678,6 +700,7 @@ import {
   type CounterItem,
 } from '@/api/metrics'
 import { buildEventRecordQuery } from '@/features/metrics/eventRecordQuery'
+import { useUserJourney } from '@/features/metrics/useUserJourney'
 
 use([LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
@@ -838,6 +861,29 @@ const events = reactive<PagedResult<EventRecord>>({ projectId: '', rangeStart: '
 const devices = reactive<PagedResult<DeviceRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
 const sessions = reactive<PagedResult<SessionRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
 const traffic = reactive<PagedResult<TrafficMetricRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
+
+const {
+  visible: userJourneyVisible,
+  loading: userJourneyLoading,
+  anchor: userJourneyAnchor,
+  journey: userJourney,
+  windowKey: userJourneyWindow,
+  propertiesLoadingEventIds: userJourneyPropertiesLoading,
+  load: loadUserJourney,
+  open: openUserJourney,
+  loadProperties: loadUserJourneyEventProperties,
+  setVisible: setUserJourneyVisible,
+  updateWindow: updateUserJourneyWindow,
+  clearProjectState: clearUserJourneyProjectState,
+} = useUserJourney({
+  projectId: () => filters.projectId,
+  onLoadFailure: (error, kind) => {
+    const fallback = kind === 'journey'
+      ? t('errors.userJourneyFailed')
+      : t('errors.eventPropertiesFailed')
+    ElMessage.error(getErrorMessage(error, fallback))
+  },
+})
 
 // Dialogs & Form
 const widgetConfigDialogVisible = ref(false)
@@ -2389,6 +2435,7 @@ const clearLoadingStates = () => {
 }
 
 const clearProjectScopedState = () => {
+  clearUserJourneyProjectState()
   overview.value = null
   appVersions.value = null
   appVersionsFailed.value = false

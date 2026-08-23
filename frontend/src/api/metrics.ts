@@ -92,6 +92,30 @@ export type EventRecord = {
   properties: Record<string, unknown> | null
 }
 
+export type EventJourney = {
+  projectId: string
+  anchorEventId: string
+  subjectType: 'actor' | 'device'
+  resolvedActorId: string | null
+  rangeStart: string
+  rangeEnd: string
+  total: number
+  truncated: boolean
+  items: JourneyEventRecord[]
+}
+
+export type JourneyEventRecord = EventRecord & {
+  propertiesBytes: number
+  propertiesLoadable: boolean
+  propertiesDeferred: boolean
+}
+
+export type EventPropertiesResponse = {
+  projectId: string
+  eventId: string
+  properties: Record<string, unknown> | null
+}
+
 export type DeviceRecord = {
   deviceId: string
   apiKey: string
@@ -313,6 +337,19 @@ export const getEvents = (params: {
   deviceId?: string
 }) => {
   return request.get<ApiResponse<PagedResult<EventRecord>>>('/admin/events', { params })
+}
+
+export const getEventJourney = (params: {
+  projectId: string
+  anchorEventId: string
+  beforeMinutes?: number
+  afterMinutes?: number
+}) => {
+  return request.get<ApiResponse<EventJourney>>('/admin/events/journey', { params })
+}
+
+export const getEventProperties = (params: { projectId: string; eventId: string }) => {
+  return request.get<ApiResponse<EventPropertiesResponse>>('/admin/events/properties', { params })
 }
 
 export const getDevices = (params: {
