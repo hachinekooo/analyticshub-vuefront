@@ -23,13 +23,14 @@ const projectScoped = computed(() => Boolean(route.meta.projectScoped))
 const routeProjectId = computed(() => projectIdFromParam(route.params.projectId))
 const activeSection = computed<ProjectSection>(() => {
   const section = route.meta.projectSection
-  return section === 'semantics' || section === 'counters' || section === 'privacy'
+  return section === 'semantics' || section === 'analysis-config' || section === 'counters' || section === 'privacy'
     ? section
     : 'dashboard'
 })
 const projectNavigation = computed(() => [
   { section: 'dashboard' as const, label: t('nav.metrics') },
   { section: 'semantics' as const, label: t('nav.semantics') },
+  { section: 'analysis-config' as const, label: t('nav.analysisConfig') },
   { section: 'counters' as const, label: t('nav.counters') },
   { section: 'privacy' as const, label: t('nav.privacyRequests') },
 ])

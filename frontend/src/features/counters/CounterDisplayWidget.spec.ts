@@ -15,10 +15,10 @@ describe('CounterDisplayWidget', () => {
         data: {
           items: [
             {
-              key: 'letters_completed',
+              key: 'content_completed',
               value: 1370,
-              displayName: { 'zh-CN': '累计完成信件' },
-              unit: { 'zh-CN': '封' },
+              displayName: { 'zh-CN': '累计完成内容' },
+              unit: { 'zh-CN': '项' },
             },
             {
               key: 'shares_completed',
@@ -46,9 +46,9 @@ describe('CounterDisplayWidget', () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('累计完成信件')
+    expect(wrapper.text()).toContain('累计完成内容')
     expect(wrapper.text()).toContain('1370')
-    expect(wrapper.text()).toContain('封')
+    expect(wrapper.text()).toContain('项')
     expect(wrapper.text()).toContain('截至当前累计值')
     expect(wrapper.find('button').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('新建累计统计')
@@ -59,7 +59,7 @@ describe('CounterDisplayWidget', () => {
       props: {
         projectId: 'demo_app',
         title: '累计统计',
-        configuredKeys: ['shares_completed', 'missing_counter', 'letters_completed'],
+        configuredKeys: ['shares_completed', 'missing_counter', 'content_completed'],
         refreshToken: 0,
       },
       global: {
@@ -72,7 +72,7 @@ describe('CounterDisplayWidget', () => {
     const cards = wrapper.findAll('.counter-card')
     expect(cards.map(card => card.text())).toEqual([
       expect.stringContaining('累计完成分享'),
-      expect.stringContaining('累计完成信件'),
+      expect.stringContaining('累计完成内容'),
     ])
     expect(wrapper.text()).toContain('missing_counter')
   })

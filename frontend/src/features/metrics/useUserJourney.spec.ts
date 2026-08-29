@@ -15,7 +15,7 @@ import { useUserJourney } from './useUserJourney'
 
 const anchor: EventRecord = {
   eventId: 'evt-anchor',
-  eventType: 'letter_created',
+  eventType: 'content_created',
   eventTimestamp: 1,
   createdAt: '2026-08-23T00:00:00Z',
   deviceId: '11111111-1111-4111-8111-111111111111',

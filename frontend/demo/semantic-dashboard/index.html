@@ -170,15 +170,15 @@
       </div>
       <div id="counter-panel" class="hidden">
         <div class="card workspace-toolbar"><div><strong>计数器</strong><p class="muted">管理需要长期累计的业务数字。</p></div><button class="btn" id="create-counter">新建计数器</button></div>
-        <div class="card table-card"><table><thead><tr><th>业务名称</th><th>Counter Key</th><th>当前累计值</th><th>自动递增规则</th><th>状态</th><th>操作</th></tr></thead><tbody><tr><td><strong>累计完成信件</strong></td><td><code>letters_completed</code></td><td><strong id="counter-value">12,850</strong> 封</td><td><code>product.core_action.completed</code> · 每次 +1</td><td><span class="status ok">运行中</span></td><td><button class="btn small ghost" id="adjust-counter">校正</button></td></tr></tbody></table></div>
+        <div class="card table-card"><table><thead><tr><th>业务名称</th><th>Counter Key</th><th>当前累计值</th><th>自动递增规则</th><th>状态</th><th>操作</th></tr></thead><tbody><tr><td><strong>累计完成内容</strong></td><td><code>content_completed</code></td><td><strong id="counter-value">12,850</strong> 项</td><td><code>product.core_action.completed</code> · 每次 +1</td><td><span class="status ok">运行中</span></td><td><button class="btn small ghost" id="adjust-counter">校正</button></td></tr></tbody></table></div>
       </div>
       <div id="placeholder-panel" class="hidden"><div class="card empty-panel"><div><h2 id="placeholder-title">功能页面</h2><p class="muted">Demo 只展示项目结构和页面入口，本页暂不模拟具体业务。</p></div></div></div>
     </section>
   </main>
 
   <div class="modal-backdrop" id="widget-modal" role="dialog" aria-modal="true" aria-labelledby="widget-modal-title"><div class="modal"><h2 id="widget-modal-title">添加组件</h2><p class="muted">组件引用语义指标，不直接绑定客户端原始 Key。</p><div class="field"><label for="widget-key">指标语义</label><select id="widget-key"></select></div><div class="form-grid"><div class="field"><label for="widget-type">展示形式</label><select id="widget-type"><option value="number">数字卡片</option><option value="trend">趋势图</option><option value="funnel">转化漏斗</option></select></div><div class="field"><label for="widget-title">组件标题</label><input id="widget-title" /></div></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn primary" id="save-widget">添加组件</button></div></div></div>
-  <div class="modal-backdrop" id="mapping-modal" role="dialog" aria-modal="true" aria-labelledby="mapping-title"><div class="modal"><h2 id="mapping-title">配置语义映射</h2><p class="muted">修改中间映射关系，不重写历史事件。</p><div class="field"><label for="mapping-raw">原始事件 Key</label><input id="mapping-raw" readonly /></div><div class="field"><label for="mapping-semantic">语义 Key</label><select id="mapping-semantic"><option value="app.lifecycle.launched">app.lifecycle.launched</option><option value="product.core_action.started">product.core_action.started</option><option value="product.core_action.completed">product.core_action.completed</option><option value="commerce.paywall.opened">commerce.paywall.opened</option><option value="custom.stationery.beautification.applied">custom.stationery.beautification.applied</option></select></div><div class="field"><label for="mapping-name">项目展示名称</label><input id="mapping-name" /></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn primary" id="save-mapping">保存映射</button></div></div></div>
-  <div class="modal-backdrop" id="counter-modal" role="dialog" aria-modal="true" aria-labelledby="counter-modal-title"><div class="modal"><h2 id="counter-modal-title">校正累计完成信件</h2><p class="muted">人工校正需要填写原因，真实系统会保留审计记录。</p><div class="field"><label for="counter-adjustment">调整数量</label><input id="counter-adjustment" type="number" value="-25" /></div><div class="field"><label for="counter-reason">调整原因</label><input id="counter-reason" value="排除历史测试事件" /></div><div class="summary-list"><div>当前值</div><div id="counter-current-value">12,850</div><div>调整后</div><div id="counter-next-value">12,825</div></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn primary" id="save-counter-adjustment">确认校正</button></div></div></div>
+  <div class="modal-backdrop" id="mapping-modal" role="dialog" aria-modal="true" aria-labelledby="mapping-title"><div class="modal"><h2 id="mapping-title">配置语义映射</h2><p class="muted">修改中间映射关系，不重写历史事件。</p><div class="field"><label for="mapping-raw">原始事件 Key</label><input id="mapping-raw" readonly /></div><div class="field"><label for="mapping-semantic">语义 Key</label><select id="mapping-semantic"><option value="app.lifecycle.launched">app.lifecycle.launched</option><option value="product.core_action.started">product.core_action.started</option><option value="product.core_action.completed">product.core_action.completed</option><option value="commerce.paywall.opened">commerce.paywall.opened</option><option value="content.presentation.applied">content.presentation.applied</option></select></div><div class="field"><label for="mapping-name">项目展示名称</label><input id="mapping-name" /></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn primary" id="save-mapping">保存映射</button></div></div></div>
+  <div class="modal-backdrop" id="counter-modal" role="dialog" aria-modal="true" aria-labelledby="counter-modal-title"><div class="modal"><h2 id="counter-modal-title">校正累计完成内容</h2><p class="muted">人工校正需要填写原因，真实系统会保留审计记录。</p><div class="field"><label for="counter-adjustment">调整数量</label><input id="counter-adjustment" type="number" value="-25" /></div><div class="field"><label for="counter-reason">调整原因</label><input id="counter-reason" value="排除历史测试事件" /></div><div class="summary-list"><div>当前值</div><div id="counter-current-value">12,850</div><div>调整后</div><div id="counter-next-value">12,825</div></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn primary" id="save-counter-adjustment">确认校正</button></div></div></div>
   <div class="toast" id="toast"></div>
 
   <script>
@@ -188,14 +188,14 @@
       {id:'webapp',name:'WebApp / SaaS',desc:'同时初始化产品行为和网站流量。',spaces:[['product','产品运营'],['traffic','网站流量']],chips:['产品运营','网站流量']},
       {id:'blank',name:'空白项目',desc:'不初始化组件，从空工作台开始。',spaces:[['custom','自定义分析']],chips:['完全自定义']}
     ];
-    let projects=[{id:'memobox_prod',name:'Memobox',template:'app',lastData:'2 分钟前'}];
+    let projects=[{id:'demo_product',name:'Demo Product',template:'app',lastData:'2 分钟前'}];
     const semanticDefinitions=[
       {raw:'app_launch',key:'app.lifecycle.launched',name:'APP 启动',mapped:true},
-      {raw:'authoring_started',key:'product.core_action.started',name:'开始写信',mapped:true},
-      {raw:'letter_created',key:'product.core_action.completed',name:'完成信件',mapped:true},
-      {raw:'letter_saved',key:'product.core_action.completed',name:'完成信件',mapped:true},
+      {raw:'content_started',key:'product.core_action.started',name:'开始创作',mapped:true},
+      {raw:'content_created',key:'product.core_action.completed',name:'完成内容',mapped:true},
+      {raw:'content_saved',key:'product.core_action.completed',name:'完成内容',mapped:true},
       {raw:'paywall_viewed',key:'commerce.paywall.opened',name:'付费页面打开',mapped:true},
-      {raw:'stationery_beautification_applied',key:'',name:'',mapped:false}
+      {raw:'content_presentation_applied',key:'',name:'',mapped:false}
     ];
     const layouts={};
     let createStep=1,selectedTemplate='app',activeProject=null,activeSection='dashboard',activeSpace='',editing=false,editingLayout=null,editingWidgetId=null,draggingId=null,counterValue=12850;
@@ -205,7 +205,7 @@
       const space=templateFor(project.template).spaces[0][0];
       if(project.template==='website') return [{id:uid(),space,title:'访问次数',key:'web.page.viewed',type:'number',w:4,h:3,value:'6,120'},{id:uid(),space,title:'独立访客',key:'web.visitor.active',type:'number',w:4,h:3,value:'2,840'},{id:uid(),space,title:'访问趋势',key:'web.page.viewed',type:'trend',w:8,h:4}];
       if(project.template==='blank') return [];
-      const widgets=[{id:uid(),space:project.template==='webapp'?'product':space,title:'APP 启动次数',key:'app.lifecycle.launched',type:'number',w:4,h:3,value:'3,268'},{id:uid(),space:project.template==='webapp'?'product':space,title:'累计完成信件',key:'product.core_action.completed',type:'number',w:4,h:3,value:'12,850'},{id:uid(),space:project.template==='webapp'?'product':space,title:'核心动作趋势',key:'product.core_action.completed',type:'trend',w:8,h:4},{id:uid(),space:project.template==='webapp'?'product':space,title:'付费转化漏斗',key:'commerce.paywall.opened',type:'funnel',w:12,h:4}];
+      const widgets=[{id:uid(),space:project.template==='webapp'?'product':space,title:'APP 启动次数',key:'app.lifecycle.launched',type:'number',w:4,h:3,value:'3,268'},{id:uid(),space:project.template==='webapp'?'product':space,title:'累计完成内容',key:'product.core_action.completed',type:'number',w:4,h:3,value:'12,850'},{id:uid(),space:project.template==='webapp'?'product':space,title:'核心动作趋势',key:'product.core_action.completed',type:'trend',w:8,h:4},{id:uid(),space:project.template==='webapp'?'product':space,title:'付费转化漏斗',key:'commerce.paywall.opened',type:'funnel',w:12,h:4}];
       if(project.template==='webapp') widgets.push({id:uid(),space:'traffic',title:'页面访问',key:'web.page.viewed',type:'trend',w:8,h:4},{id:uid(),space:'traffic',title:'独立访客',key:'web.visitor.active',type:'number',w:4,h:3,value:'2,840'});
       return widgets;
     }
@@ -255,7 +255,7 @@
       renderWorkspaceHeader();
     }
     function widgetBody(widget){
-      if(widget.type==='number')return `<div class="value">${widget.value||'1,286'} <small>${widget.title.includes('信件')?'封':'次'}</small></div><p class="muted">Mock · 当前统计口径</p>`;
+      if(widget.type==='number')return `<div class="value">${widget.value||'1,286'} <small>${widget.title.includes('内容')?'项':'次'}</small></div><p class="muted">Mock · 当前统计口径</p>`;
       if(widget.type==='funnel')return `<div class="funnel"><div style="width:100%">付费页面打开 · 1,240</div><div style="width:70%">发起购买 · 486</div><div style="width:44%">购买完成 · 218</div></div>`;
       return `<div class="bars">${[45,62,38,70,54,82,76,95,66,88].map(height=>`<span style="height:${height}%"></span>`).join('')}</div>`;
     }
@@ -278,7 +278,7 @@
       const up=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);renderDashboard();};document.addEventListener('pointermove',move);document.addEventListener('pointerup',up);
     }
     function openWidgetModal(id=null){
-      editingWidgetId=id;const options=[['app.lifecycle.launched','APP 启动'],['product.core_action.completed','核心动作完成'],['commerce.paywall.opened','付费页面打开'],['custom.stationery.beautification_applied','美化使用']];$('widget-key').innerHTML=options.map(([key,name])=>`<option value="${key}">${name} · ${key}</option>`).join('');
+      editingWidgetId=id;const options=[['app.lifecycle.launched','APP 启动'],['product.core_action.completed','核心动作完成'],['commerce.paywall.opened','付费页面打开'],['content.presentation.applied','内容样式使用']];$('widget-key').innerHTML=options.map(([key,name])=>`<option value="${key}">${name} · ${key}</option>`).join('');
       if(id){const widget=editingLayout.find(item=>item.id===id);$('widget-modal-title').textContent='配置组件';$('widget-key').value=widget.key;$('widget-type').value=widget.type;$('widget-title').value=widget.title;$('save-widget').textContent='保存配置';}else{$('widget-modal-title').textContent='添加组件';$('widget-key').value=options[0][0];$('widget-type').value='number';$('widget-title').value=options[0][1];$('save-widget').textContent='添加组件';}$('widget-modal').classList.add('open');
     }
     function saveWidget(){const next={title:$('widget-title').value.trim(),key:$('widget-key').value,type:$('widget-type').value};if(editingWidgetId)Object.assign(editingLayout.find(item=>item.id===editingWidgetId),next);else editingLayout.push({id:uid(),space:activeSpace,w:4,h:3,value:'1,286',...next});$('widget-modal').classList.remove('open');renderDashboard();}

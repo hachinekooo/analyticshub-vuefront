@@ -14,7 +14,7 @@ describe('EventPropertiesPreview', () => {
       attachTo: document.body,
       props: {
         value: {
-          entry_point: 'canvas_border_style',
+          entry_point: 'theme_panel',
           nested: { enabled: true },
         },
       },
@@ -24,7 +24,7 @@ describe('EventPropertiesPreview', () => {
     })
 
     const reference = wrapper.get('.event-properties-reference')
-    expect(reference.text()).toContain('"entry_point":"canvas_border_style"')
+    expect(reference.text()).toContain('"entry_point":"theme_panel"')
 
     await reference.trigger('mouseenter')
     await new Promise(resolve => setTimeout(resolve, 250))
@@ -32,7 +32,7 @@ describe('EventPropertiesPreview', () => {
 
     const detail = document.body.querySelector('.event-properties-detail')
     expect(detail?.textContent).toContain('完整 JSON')
-    expect(detail?.querySelector('pre')?.textContent).toContain('\n  "entry_point": "canvas_border_style"')
+    expect(detail?.querySelector('pre')?.textContent).toContain('\n  "entry_point": "theme_panel"')
 
     wrapper.unmount()
   })

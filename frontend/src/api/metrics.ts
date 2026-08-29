@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import type { CounterEventTrigger } from '@/features/counters/eventTrigger'
+import { ANALYTICS_QUERY_TIMEOUT_MS } from './analyticsQueryPolicy'
 
 export type {
   CounterEventTrigger,
@@ -14,7 +15,7 @@ export type MetricsOverview = {
   projectId: string
   rangeStart: string
   rangeEnd: string
-  devicesTotal: number
+  devicesInventoryTotal: number
   devicesActive: number
   usersActive: number
   cloudAccountsCreated: number
@@ -23,8 +24,8 @@ export type MetricsOverview = {
   eventsTotal: number
   avgSessionDurationMs: number
   avgEventsPerSession: number
-  /** 新后端声明的项目级可用指标；旧服务响应可能暂时缺失。 */
-  availableMetricKeys?: string[]
+  /** 后端声明的项目级可用指标。 */
+  availableMetricKeys: string[]
 }
 
 export type TrendPoint = {
@@ -62,8 +63,8 @@ export type MetricsTrends = {
   rangeStart: string
   rangeEnd: string
   points: TrendPoint[]
-  /** 新后端声明的项目级可用趋势；旧服务响应可能暂时缺失。 */
-  availableMetricKeys?: string[]
+  /** 后端声明的项目级可用趋势。 */
+  availableMetricKeys: string[]
 }
 
 export type TopEventItem = {
@@ -276,6 +277,7 @@ export type FunnelResponse = {
 
 export type RetentionBucket = {
   day: number
+  eligibleUsers: number
   retainedUsers: number
   retentionRate: number
 }
@@ -284,35 +286,74 @@ export type RetentionResponse = {
   projectId: string
   rangeStart: string
   rangeEnd: string
+  observationEnd: string
+  requestedObservationEnd: string
+  observationComplete: boolean
   cohortEvent: string
   returnEvent: string
   cohortUsers: number
   buckets: RetentionBucket[]
 }
 
+export type AnalyticsDataQuality = {
+  projectId: string
+  from: string
+  to: string
+  totalEvents: number
+  trustedSchemaPolicyConfigured: boolean
+  schemaVersionPropertyKey: string | null
+  schemaVersions: Record<string, number>
+  schemaVersionDistributionTruncated: boolean
+  issues: Array<{ code: string; severity: 'error' | 'warning'; count: number; description: string }>
+  propertyCoverage: Array<{
+    propertyKey: string
+    presentEvents: number
+    typeMismatchEvents: number
+    disallowedValueEvents: number
+  }>
+  propertyCoverageTotal: number
+  propertyCoverageTruncated: boolean
+}
+
+export type AnalyticsPropertyFilterOperator = 'EQ' | 'IN' | 'EXISTS'
+export type AnalyticsPropertyFilter = {
+  propertyKey: string
+  operator: AnalyticsPropertyFilterOperator
+  values: string[]
+}
+
 export const getMetricsOverview = (params: {
   projectId: string
   from?: string
   to?: string
+  propertyFilters?: string
 }) => {
-  return request.get<ApiResponse<MetricsOverview>>('/admin/metrics/overview', { params })
+  return request.get<ApiResponse<MetricsOverview>>('/admin/metrics/overview', { params, timeout: ANALYTICS_QUERY_TIMEOUT_MS })
 }
+
+export const getAnalyticsDataQuality = (params: {
+  projectId: string
+  from?: string
+  to?: string
+}) => request.get<ApiResponse<AnalyticsDataQuality>>('/admin/metrics/data-quality', { params, timeout: ANALYTICS_QUERY_TIMEOUT_MS })
 
 export const getMetricsTrends = (params: {
   projectId: string
   from?: string
   to?: string
   granularity?: MetricsGranularity
+  propertyFilters?: string
 }) => {
-  return request.get<ApiResponse<MetricsTrends>>('/admin/metrics/trends', { params })
+  return request.get<ApiResponse<MetricsTrends>>('/admin/metrics/trends', { params, timeout: ANALYTICS_QUERY_TIMEOUT_MS })
 }
 
 export const getAppVersionDistribution = (params: {
   projectId: string
   from?: string
   to?: string
+  propertyFilters?: string
 }) => {
-  return request.get<ApiResponse<AppVersionDistribution>>('/admin/metrics/app-versions', { params })
+  return request.get<ApiResponse<AppVersionDistribution>>('/admin/metrics/app-versions', { params, timeout: ANALYTICS_QUERY_TIMEOUT_MS })
 }
 
 export const getTopEvents = (params: {
@@ -321,8 +362,9 @@ export const getTopEvents = (params: {
   to?: string
   limit?: number
   aggregation?: 'raw' | 'semantic'
+  propertyFilters?: string
 }) => {
-  return request.get<ApiResponse<MetricsTopEvents>>('/admin/metrics/top-events', { params })
+  return request.get<ApiResponse<MetricsTopEvents>>('/admin/metrics/top-events', { params, timeout: ANALYTICS_QUERY_TIMEOUT_MS })
 }
 
 export const getEvents = (params: {
@@ -472,8 +514,9 @@ export const getProductFunnel = (params: {
   steps: string
   groupBy?: string
   journeyKey?: string
+  propertyFilters?: string
 }) => {
-  return request.get<ApiResponse<FunnelResponse>>('/admin/analytics/funnel', { params })
+  return request.get<ApiResponse<FunnelResponse>>('/admin/analytics/funnel', { params, timeout: ANALYTICS_QUERY_TIMEOUT_MS })
 }
 
 export const getProductRetention = (params: {
@@ -483,8 +526,9 @@ export const getProductRetention = (params: {
   cohortEvent: string
   returnEvent: string
   days?: string
+  propertyFilters?: string
 }) => {
-  return request.get<ApiResponse<RetentionResponse>>('/admin/analytics/retention', { params })
+  return request.get<ApiResponse<RetentionResponse>>('/admin/analytics/retention', { params, timeout: ANALYTICS_QUERY_TIMEOUT_MS })
 }
 
 export const getPublicTrafficSummary = (params: {

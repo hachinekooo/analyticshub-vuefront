@@ -26,16 +26,9 @@ describe('overview metric catalog', () => {
     ])
   })
 
-  it('falls back to safe system metrics when an old backend omits availability', () => {
-    expect(resolveOverviewMetricKeys(undefined, undefined)).toEqual([
-      OVERVIEW_METRIC_KEYS.activeDevices,
-      OVERVIEW_METRIC_KEYS.activeActors,
-      OVERVIEW_METRIC_KEYS.eventOccurrences,
-      OVERVIEW_METRIC_KEYS.topActiveAppVersion,
-    ])
-    expect(resolveTrendMetricKeys(undefined)).toEqual([
-      OVERVIEW_METRIC_KEYS.activeDevices,
-    ])
+  it('does not infer metrics when the backend declares none', () => {
+    expect(resolveOverviewMetricKeys(undefined, [])).toEqual([])
+    expect(resolveTrendMetricKeys([])).toEqual([])
   })
 
   it('preserves the explicit dashboard order and removes unavailable metrics', () => {

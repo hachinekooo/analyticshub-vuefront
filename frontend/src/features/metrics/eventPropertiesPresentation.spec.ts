@@ -4,7 +4,7 @@ import { presentEventProperties } from './eventPropertiesPresentation'
 describe('presentEventProperties', () => {
   it('keeps the table summary compact and exposes complete formatted JSON', () => {
     const value = {
-      entry_point: 'canvas_border_style',
+      entry_point: 'theme_panel',
       style_id: 'premium_frame_01',
       nested: { enabled: true, steps: [1, 2, 3] },
     }

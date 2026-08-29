@@ -28,4 +28,29 @@ describe('AdminMetrics layout-editing interaction policy', () => {
   it('does not silently convert a legacy overview into an explicit metric snapshot on layout save', () => {
     expect(source).not.toContain("type === 'core.overview' && !Array.isArray(config?.metricKeys)")
   })
+
+  it('clears project-scoped property filters and uses the committed snapshot for all supported views', () => {
+    expect(source).toContain('filters.propertyFilters = []')
+    expect(source.match(/propertyFilters: context\.snapshot\.propertyFilters/g)?.length).toBeGreaterThanOrEqual(6)
+  })
+
+  it('defaults governed projects to their trusted schema scope and labels diagnostic fallback', () => {
+    expect(source).toContain('await loadTrustedSchemaPolicy(projectId, generation)')
+    expect(source).toContain('filters.propertyFilters = response.data.data ? [trustedSchemaFilter(response.data.data)] : []')
+    expect(source).toContain("t('analyticsFilters.diagnosticScopeTitle')")
+    expect(source).toContain("t('analyticsFilters.trustedScopeLoadFailedTitle')")
+  })
+
+  it('loads registered properties before the first product-funnel configuration', () => {
+    expect(source.match(/Promise\.all\(\[loadSemanticDefinitions\(\), loadAnalyticsProperties\(\)\]\)/g)?.length)
+      .toBeGreaterThanOrEqual(2)
+    expect(source).toContain(':loading="analyticsPropertiesLoading"')
+  })
+
+  it('localizes bounded-query recovery errors instead of exposing backend copy', () => {
+    expect(source).toContain("ANALYTICS_QUERY_RANGE_EXCEEDED: t('analysisConfig.errorCodes.range')")
+    expect(source).toContain("ANALYTICS_QUERY_BUDGET_EXCEEDED: t('analysisConfig.errorCodes.budget')")
+    expect(source).toContain("ANALYTICS_QUERY_TIMEOUT: t('analysisConfig.errorCodes.timeout')")
+    expect(source.match(/getAnalyticsQueryErrorMessage\(error/g)?.length).toBeGreaterThanOrEqual(6)
+  })
 })

@@ -38,6 +38,12 @@ const router = createRouter({
           component: () => import('../views/ProjectCounters.vue'),
           meta: { projectScoped: true, projectSection: 'counters' },
         },
+        {
+          path: 'projects/:projectId/analysis-config',
+          name: 'analysis-config',
+          component: () => import('../views/AnalysisConfiguration.vue'),
+          meta: { projectScoped: true, projectSection: 'analysis-config' },
+        },
       ],
     },
     {

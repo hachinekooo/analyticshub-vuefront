@@ -18,7 +18,7 @@ import type { EventJourney, EventRecord } from '@/api/metrics'
 
 const anchor: EventRecord = {
   eventId: 'evt_anchor',
-  eventType: 'authoring_started',
+  eventType: 'content_started',
   eventTimestamp: Date.parse('2026-01-01T02:00:00Z'),
   createdAt: '2026-01-01T02:00:01Z',
   deviceId: '11111111-1111-4111-8111-111111111111',
@@ -27,7 +27,7 @@ const anchor: EventRecord = {
   identityScope: 'anonymous',
   actorLinked: true,
   sessionId: '44444444-4444-4444-8444-444444444444',
-  properties: { entry_point: 'compose' },
+  properties: { entry_point: 'editor' },
 }
 
 const journey: EventJourney = {
@@ -92,7 +92,7 @@ describe('UserJourneyDrawer', () => {
         propertiesLoadingEventIds: [],
         presentEvent: (eventKey: string) => ({
           eventKey,
-          displayName: { 'zh-CN': eventKey === 'authoring_started' ? '开始写信' : '云账号登录成功' },
+          displayName: { 'zh-CN': eventKey === 'content_started' ? '开始创作' : '云账号登录成功' },
         }),
       },
       global: {
@@ -114,14 +114,14 @@ describe('UserJourneyDrawer', () => {
     await nextTick()
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(document.body.textContent).toContain('用户旅程')
-    expect(document.body.textContent).toContain('开始写信')
+    expect(document.body.textContent).toContain('开始创作')
     expect(document.body.textContent).toContain('云账号登录成功')
     expect(document.body.textContent).toContain('所选事件')
     expect(document.body.textContent).toContain('#1')
     expect(document.body.textContent).toContain('#4')
     expect(document.body.textContent).toContain('匿名阶段')
     expect(document.body.textContent).toContain('云账号阶段')
-    expect(document.body.textContent).toContain('"entry_point": "compose"')
+    expect(document.body.textContent).toContain('"entry_point": "editor"')
     expect(document.body.textContent).toContain('收起全部详情')
     expect(document.body.textContent).toContain('加载完整属性')
     expect(document.body.textContent).toContain('属性大小为 3 MB，已超过 2 MB 在线查看上限')
@@ -139,7 +139,7 @@ describe('UserJourneyDrawer', () => {
     expect(collapseButton).toBeDefined()
     collapseButton?.click()
     await nextTick()
-    expect(document.body.textContent).not.toContain('"entry_point": "compose"')
+    expect(document.body.textContent).not.toContain('"entry_point": "editor"')
     expect(document.body.textContent).toContain('展开全部详情')
 
     const dayOption = document.querySelector<HTMLInputElement>('input[type="radio"][value="day"]')

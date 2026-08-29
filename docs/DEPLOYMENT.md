@@ -57,11 +57,11 @@ pnpm check
 
 该命令依次执行 lint、单元测试、TypeScript 检查、生产构建和 bundle budget 校验。全部成功后，产物位于 `frontend/dist/`。
 
-发布 `1.1.1` 时，将完整 dist 作为一个 artifact 保存并记录 checksum；测试通过后把同一个压缩包提升到生产，不要重新构建：
+发布 `1.1.2` 时，将完整 dist 作为一个 artifact 保存并记录 checksum；测试通过后把同一个压缩包提升到生产，不要重新构建：
 
 ```bash
-tar -czf analyticshub-frontend-1.1.1.tar.gz -C frontend dist
-shasum -a 256 analyticshub-frontend-1.1.1.tar.gz
+tar -czf analyticshub-frontend-1.1.2.tar.gz -C frontend dist
+shasum -a 256 analyticshub-frontend-1.1.2.tar.gz
 ```
 
 生产 base 固定为 `/analyticshub/`，静态资源路径为 `/analyticshub/assets/**`。
@@ -97,6 +97,7 @@ https://analytics.example.com/analyticshub/
 - 切换项目后列表、指标和工单会重新请求当前项目；
 - 浏览器刷新子路由不会 404；
 - 静态资源和 `/analyticshub/api/**` 请求没有 404/502；
+- 已配置可信 Schema 策略的项目默认显示“可信运营范围”，移除对应筛选后切换为“跨版本诊断范围”；
 - 构建产物不包含 Token、数据库密码或 API secret。
 
 ## 常见问题

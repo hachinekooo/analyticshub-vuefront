@@ -15,8 +15,8 @@ describe('EventLegendPopover', () => {
       attachTo: document.body,
       props: {
         events: [
-          { eventKey: 'letter_saved', displayName: { 'zh-CN': '信件已保存' }, description: '完成信件保存。' },
-          { eventKey: 'letter_saved', displayName: { 'zh-CN': '信件已保存' }, description: '完成信件保存。' },
+          { eventKey: 'content_saved', displayName: { 'zh-CN': '内容已保存' }, description: '完成内容保存。' },
+          { eventKey: 'content_saved', displayName: { 'zh-CN': '内容已保存' }, description: '完成内容保存。' },
           { eventKey: 'paywall_opened', displayName: { 'zh-CN': '付费墙打开' }, description: '用户看到付费方案。' },
         ],
       },
@@ -35,7 +35,7 @@ describe('EventLegendPopover', () => {
     await new Promise(resolve => setTimeout(resolve, 0))
 
     expect(document.body.querySelectorAll('.event-legend-item')).toHaveLength(2)
-    expect(document.body.textContent).toContain('letter_saved')
+    expect(document.body.textContent).toContain('content_saved')
     expect(document.body.textContent).toContain('paywall_opened')
     expect(wrapper.findAllComponents(SemanticEventLabel).every(
       label => label.props('showHelp') === false,

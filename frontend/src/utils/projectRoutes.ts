@@ -1,8 +1,9 @@
-export type ProjectSection = 'dashboard' | 'semantics' | 'counters' | 'privacy'
+export type ProjectSection = 'dashboard' | 'semantics' | 'analysis-config' | 'counters' | 'privacy'
 
 const sectionRouteNames: Record<ProjectSection, string> = {
   dashboard: 'metrics',
   semantics: 'semantics',
+  'analysis-config': 'analysis-config',
   counters: 'counters',
   privacy: 'privacy-requests',
 }

@@ -55,14 +55,6 @@ export const OVERVIEW_METRIC_CATALOG: readonly OverviewMetricDescriptor[] = [
   },
 ]
 
-export const SYSTEM_OVERVIEW_METRIC_KEYS = OVERVIEW_METRIC_CATALOG
-  .filter(metric => metric.kind === 'system')
-  .map(metric => metric.key)
-
-const LEGACY_SAFE_TREND_METRIC_KEYS: readonly OverviewMetricKey[] = [
-  OVERVIEW_METRIC_KEYS.activeDevices,
-]
-
 const supportedKeys = new Set<OverviewMetricKey>(OVERVIEW_METRIC_CATALOG.map(metric => metric.key))
 
 export const isOverviewMetricKey = (value: unknown): value is OverviewMetricKey =>
@@ -70,16 +62,13 @@ export const isOverviewMetricKey = (value: unknown): value is OverviewMetricKey 
 
 /**
  * 配置缺失时使用后端声明的可用顺序；显式配置时保留用户顺序。
- * 滚动升级期间旧后端没有可用性字段，只回退到旧 API 已能可靠提供的通用指标。
- * 不可用的业务指标不会以误导性的 0 出现在正常大屏。
+ * 不在客户端推断服务端能力，避免缺失合同被误装成可用指标。
  */
 export const resolveOverviewMetricKeys = (
   configuredKeys: unknown,
-  availableKeys: readonly string[] | null | undefined,
+  availableKeys: readonly string[],
 ): OverviewMetricKey[] => {
-  const normalizedAvailable = Array.isArray(availableKeys)
-    ? [...new Set(availableKeys.filter(isOverviewMetricKey))]
-    : SYSTEM_OVERVIEW_METRIC_KEYS
+  const normalizedAvailable = [...new Set(availableKeys.filter(isOverviewMetricKey))]
   const available = new Set(normalizedAvailable)
   const requested = Array.isArray(configuredKeys)
     ? configuredKeys.filter(isOverviewMetricKey)
@@ -88,7 +77,5 @@ export const resolveOverviewMetricKeys = (
 }
 
 export const resolveTrendMetricKeys = (
-  availableKeys: readonly string[] | null | undefined,
-): OverviewMetricKey[] => Array.isArray(availableKeys)
-  ? [...new Set(availableKeys.filter(isOverviewMetricKey))]
-  : [...LEGACY_SAFE_TREND_METRIC_KEYS]
+  availableKeys: readonly string[],
+): OverviewMetricKey[] => [...new Set(availableKeys.filter(isOverviewMetricKey))]

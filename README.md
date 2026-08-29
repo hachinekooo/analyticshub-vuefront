@@ -37,6 +37,10 @@ pnpm dev
 
 开发代理或页面标题需要调整时，复制 `frontend/.env.development.example` 为 `frontend/.env.development`；默认本地启动不需要创建该文件。
 
+只需预览页面时，可先执行 `pnpm build`，再运行 `pnpm mock:preview`。Mock 用于验证页面、空态、基本请求形状和低成本的声明式合同；它不复制生产后端的事务、所有权、跨 Pack 依赖引擎或数据库资源预算。需要验证迁移、checksum、并发导入、失败回滚、查询行数上限或 statement timeout 时，必须连接真实本地后端与 PostgreSQL。
+
+项目配置 `trustedSchemaPolicy` 后，Dashboard 会把该范围作为概览、App 版本、趋势、事件排行、漏斗和留存的默认筛选，并在页面明确显示当前是可信运营范围还是跨版本诊断范围。事件明细始终保留原始事实；管理员主动移除可信筛选时，页面不会把混合合同版本的结果标成稳定 KPI。
+
 ## 工程门禁
 
 提交前运行唯一综合门禁；它依次执行 non-mutating lint（不自动改文件）、Vitest、TypeScript 检查、生产构建和 bundle budget（产物体积上限）校验：

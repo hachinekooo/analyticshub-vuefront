@@ -40,13 +40,13 @@ describe('SemanticEventLabel', () => {
   it('can render a clean table label without repeating the help control', () => {
     const wrapper = shallowMount(SemanticEventLabel, {
       props: {
-        eventKey: 'letter_saved',
-        displayName: { 'zh-CN': '信件已保存' },
+        eventKey: 'content_saved',
+        displayName: { 'zh-CN': '内容已保存' },
         showHelp: false,
       },
     })
 
-    expect(wrapper.text()).toContain('信件已保存')
+    expect(wrapper.text()).toContain('内容已保存')
     expect(wrapper.findComponent({ name: 'MetricHelpIcon' }).exists()).toBe(false)
   })
 })

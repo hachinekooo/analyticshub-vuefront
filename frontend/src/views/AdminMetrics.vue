@@ -22,6 +22,21 @@
       @customize="startLayoutEditing"
     />
 
+    <el-alert
+      class="trusted-analysis-scope"
+      :type="trustedScopeAlert.type"
+      :closable="false"
+      :title="trustedScopeAlert.title"
+      :description="trustedScopeAlert.description"
+      show-icon
+    />
+
+    <AnalyticsPropertyFilters
+      ref="analyticsPropertyFiltersRef"
+      v-model="filters.propertyFilters"
+      :project-id="filters.projectId"
+    />
+
     <DashboardEditorPanel
       :visible="isLayoutEditable"
       :available-widgets="availableWidgetTypes"
@@ -173,10 +188,20 @@
                      <span>{{ t('tables.cohortUsers') }}</span>
                      <strong>{{ formatNumber(retention?.cohortUsers || 0) }}</strong>
                    </div>
+                   <p v-if="retention" class="retention-observation-note">
+                     {{ t(retention.observationComplete
+                       ? 'metrics.retentionObservationComplete'
+                       : 'metrics.retentionObservationPartial', {
+                       cohortEnd: formatTimestamp(retention.rangeEnd),
+                       observationEnd: formatTimestamp(retention.observationEnd),
+                       requestedObservationEnd: formatTimestamp(retention.requestedObservationEnd),
+                     }) }}
+                   </p>
                    <el-table :data="retention?.buckets || []" size="small" style="width: 100%">
                       <el-table-column prop="day" :label="t('tables.day')" min-width="80">
                         <template #default="{ row }">D{{ row.day }}</template>
                       </el-table-column>
+                      <el-table-column prop="eligibleUsers" :label="t('tables.eligibleUsers')" min-width="110" />
                       <el-table-column prop="retainedUsers" :label="t('tables.users')" min-width="100" />
                       <el-table-column prop="retentionRate" :label="t('tables.retention')" min-width="110">
                         <template #default="{ row }">{{ formatPercent(row.retentionRate) }}</template>
@@ -500,20 +525,28 @@
             </el-select>
           </el-form-item>
           <el-form-item :label="t('metrics.widgetConfig.groupBy')">
-            <el-input
+            <el-select
               v-model="widgetConfigForm.groupBy"
-              maxlength="80"
               clearable
+              filterable
+              style="width: 100%"
+              :loading="analyticsPropertiesLoading"
               :placeholder="t('metrics.widgetConfig.groupByPlaceholder')"
-            />
+            >
+              <el-option v-for="item in groupableProperties" :key="item.propertyKey" :value="item.propertyKey" :label="item.displayName[locale === 'zh' ? 'zh-CN' : 'en'] || item.displayName.default || item.propertyKey" />
+            </el-select>
           </el-form-item>
           <el-form-item :label="t('metrics.widgetConfig.journeyKey')">
-            <el-input
+            <el-select
               v-model="widgetConfigForm.journeyKey"
-              maxlength="80"
               clearable
+              filterable
+              style="width: 100%"
+              :loading="analyticsPropertiesLoading"
               :placeholder="t('metrics.widgetConfig.journeyKeyPlaceholder')"
-            />
+            >
+              <el-option v-for="item in journeyKeyProperties" :key="item.propertyKey" :value="item.propertyKey" :label="item.displayName[locale === 'zh' ? 'zh-CN' : 'en'] || item.displayName.default || item.propertyKey" />
+            </el-select>
             <div class="form-tip">{{ t('metrics.widgetConfig.journeyKeyTip') }}</div>
           </el-form-item>
         </template>
@@ -604,6 +637,8 @@ import EventPropertiesPreview from '@/components/metrics/EventPropertiesPreview.
 import UserJourneyDrawer from '@/components/metrics/UserJourneyDrawer.vue'
 import OrderedSelectionEditor, { type OrderedSelectionOption } from '@/components/metrics/OrderedSelectionEditor.vue'
 import CounterDisplayWidget from '@/features/counters/CounterDisplayWidget.vue'
+import AnalyticsPropertyFilters from '@/features/analytics/AnalyticsPropertyFilters.vue'
+import { trustedSchemaFilter, trustedSchemaScopeValues } from '@/features/analytics/trustedAnalyticsScope'
 import { useProjectContextStore } from '@/stores/projectContext'
 import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
 import { projectIdFromParam, projectRoute } from '@/utils/projectRoutes'
@@ -648,8 +683,12 @@ import {
 import {
   getEventCatalog,
   getSemanticDefinitions,
+  getAnalyticsPropertyDefinitions,
+  getTrustedSchemaPolicy,
   type EventCatalogEntry,
   type SemanticDefinition,
+  type AnalyticsPropertyDefinition,
+  type TrustedSchemaPolicy,
 } from '@/api/semantic'
 import {
   getProjectDashboards,
@@ -698,6 +737,7 @@ import {
   type FunnelResponse,
   type RetentionResponse,
   type CounterItem,
+  type AnalyticsPropertyFilter,
 } from '@/api/metrics'
 import { buildEventRecordQuery } from '@/features/metrics/eventRecordQuery'
 import { useUserJourney } from '@/features/metrics/useUserJourney'
@@ -724,6 +764,14 @@ interface DashboardAnalyticsConfig {
 const route = useRoute()
 const router = useRouter()
 const { t, locale } = useI18n()
+const analyticsQueryErrorMessages = computed(() => ({
+  ANALYTICS_QUERY_RANGE_EXCEEDED: t('analysisConfig.errorCodes.range'),
+  ANALYTICS_QUERY_BUDGET_EXCEEDED: t('analysisConfig.errorCodes.budget'),
+  ANALYTICS_QUERY_TIMEOUT: t('analysisConfig.errorCodes.timeout'),
+  ANALYTICS_DISTRIBUTION_CARDINALITY_EXCEEDED: t('analysisConfig.errorCodes.cardinality'),
+}))
+const getAnalyticsQueryErrorMessage = (error: unknown, fallback: string) =>
+  getErrorMessage(error, fallback, analyticsQueryErrorMessages.value)
 const projectContext = useProjectContextStore()
 const { activeProjects: projects, selectedProjectId, selectedProject } = storeToRefs(projectContext)
 
@@ -732,6 +780,7 @@ const routeProjectId = computed(() => {
 })
 
 const refreshing = ref(false)
+const analyticsPropertyFiltersRef = ref<{ commit: () => boolean } | null>(null)
 const isLayoutEditable = ref(false)
 const dashboardGridSpacing: [number, number] = [DASHBOARD_GRID.gap, DASHBOARD_GRID.gap]
 const dashboardGridStyle = {
@@ -763,6 +812,7 @@ const filters = reactive({
   sessionId: '',
   apiKey: '',
   isBanned: '',
+  propertyFilters: [] as AnalyticsPropertyFilter[],
 })
 const extensionRefreshToken = ref(0)
 
@@ -777,6 +827,7 @@ type MetricsRequestSnapshot = Readonly<{
   sessionId: string
   apiKey: string
   isBanned: string
+  propertyFilters: string
   eventsPage: number
   devicesPage: number
   sessionsPage: number
@@ -805,6 +856,7 @@ const captureFilterSnapshot = (): AppliedMetricsFilters => ({
   sessionId: filters.sessionId,
   apiKey: filters.apiKey,
   isBanned: filters.isBanned,
+  propertyFilters: filters.propertyFilters.length ? JSON.stringify(filters.propertyFilters) : '',
 })
 // `filters` is the editable form state; requests only read this committed snapshot.
 // This prevents half-entered filters from triggering competing request batches.
@@ -855,6 +907,52 @@ const retention = ref<RetentionResponse | null>(null)
 const dashboardAnalyticsConfig = ref<DashboardAnalyticsConfig>({})
 const semanticEventCatalog = ref<EventCatalogEntry[]>([])
 const semanticDefinitions = ref<SemanticDefinition[]>([])
+const analyticsProperties = ref<AnalyticsPropertyDefinition[]>([])
+const analyticsPropertiesLoading = ref(false)
+const trustedSchemaPolicy = ref<TrustedSchemaPolicy | null>(null)
+const trustedSchemaPolicyLoadFailed = ref(false)
+
+const appliedTrustedScopeValues = computed(() => trustedSchemaScopeValues(
+  appliedFilters.value.propertyFilters,
+  trustedSchemaPolicy.value,
+))
+const hasAppliedTrustedScope = computed(() => appliedTrustedScopeValues.value !== null)
+
+const trustedScopeAlert = computed(() => {
+  if (trustedSchemaPolicyLoadFailed.value) {
+    return {
+      type: 'warning' as const,
+      title: t('analyticsFilters.trustedScopeLoadFailedTitle'),
+      description: t('analyticsFilters.trustedScopeLoadFailedDescription'),
+    }
+  }
+  const policy = trustedSchemaPolicy.value
+  if (!policy) {
+    return {
+      type: 'warning' as const,
+      title: t('analyticsFilters.ungovernedScopeTitle'),
+      description: t('analyticsFilters.ungovernedScopeDescription'),
+    }
+  }
+  if (!hasAppliedTrustedScope.value) {
+    return {
+      type: 'warning' as const,
+      title: t('analyticsFilters.diagnosticScopeTitle'),
+      description: t('analyticsFilters.diagnosticScopeDescription', {
+        key: policy.propertyKey,
+        values: policy.trustedValues.join(', '),
+      }),
+    }
+  }
+  return {
+    type: 'success' as const,
+    title: t('analyticsFilters.trustedScopeTitle'),
+    description: t('analyticsFilters.trustedScopeDescription', {
+      key: policy.propertyKey,
+      values: appliedTrustedScopeValues.value?.join(', ') ?? '',
+    }),
+  }
+})
 
 // Paged Results
 const events = reactive<PagedResult<EventRecord>>({ projectId: '', rangeStart: '', rangeEnd: '', page: 1, pageSize: 10, total: 0, items: [] })
@@ -914,8 +1012,14 @@ const widgetConfigMinHeight = computed(() => widgetConfigTarget.value?.minH || 2
 const activeSemanticDefinitions = computed(() => semanticDefinitions.value
   .filter((definition) => definition.isActive)
   .sort((left, right) => left.semanticKey.localeCompare(right.semanticKey)))
+const groupableProperties = computed(() => analyticsProperties.value
+  .filter((item) => item.active && item.groupable && !item.sensitive)
+  .sort((left, right) => left.propertyKey.localeCompare(right.propertyKey)))
+const journeyKeyProperties = computed(() => analyticsProperties.value
+  .filter((item) => item.active && item.journeyKey && !item.sensitive)
+  .sort((left, right) => left.propertyKey.localeCompare(right.propertyKey)))
 const availableOverviewMetricKeySet = computed(() => new Set(
-  resolveOverviewMetricKeys(undefined, overview.value?.availableMetricKeys),
+  resolveOverviewMetricKeys(undefined, overview.value?.availableMetricKeys ?? []),
 ))
 const overviewMetricSelectionOptions = computed<OrderedSelectionOption[]>(() =>
   OVERVIEW_METRIC_CATALOG.map(metric => {
@@ -1224,7 +1328,7 @@ const prepareOverviewMetricSelection = async (useAvailableDefaults: boolean) => 
     && widgetConfigForm.overviewMetricKeys.length === 0) {
     widgetConfigForm.overviewMetricKeys = resolveOverviewMetricKeys(
       undefined,
-      overview.value?.availableMetricKeys,
+      overview.value?.availableMetricKeys ?? [],
     )
   }
 }
@@ -1294,7 +1398,11 @@ const openWidgetConfig = (item: DashboardItem) => {
       : '1, 7, 30'
   }
   widgetConfigDialogVisible.value = true
-  if (type === 'core.productFunnel' || type === 'core.retention') void loadSemanticDefinitions()
+  if (type === 'core.productFunnel') {
+    void Promise.all([loadSemanticDefinitions(), loadAnalyticsProperties()])
+  } else if (type === 'core.retention') {
+    void loadSemanticDefinitions()
+  }
 }
 
 const addWidgetType = (type: string) => {
@@ -1311,7 +1419,11 @@ const addWidgetType = (type: string) => {
     widgetConfigDialogVisible.value = true
     if (type === 'core.overview') void prepareOverviewMetricSelection(true)
     else if (type === 'core.counters') void loadCounterConfigurationOptions(false)
-    else void loadSemanticDefinitions()
+    else if (type === 'core.productFunnel') {
+      void Promise.all([loadSemanticDefinitions(), loadAnalyticsProperties()])
+    } else {
+      void loadSemanticDefinitions()
+    }
     return
   }
   appendWidgetType(type)
@@ -1755,7 +1867,7 @@ const numberFormatter = computed(() =>
 )
 const formatNumber = (value: number) => numberFormatter.value.format(value)
 
-const formatTimestamp = (value: number) => {
+const formatTimestamp = (value: number | string) => {
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString()
 }
@@ -1815,7 +1927,7 @@ const overviewItemsForWidget = (item: DashboardItem) => {
     })
 }
 const businessTrendsHelp = computed(() => {
-  const available = new Set(resolveTrendMetricKeys(trends.value?.availableMetricKeys))
+  const available = new Set(resolveTrendMetricKeys(trends.value?.availableMetricKeys ?? []))
   return available.has(OVERVIEW_METRIC_KEYS.accountCreated)
     || available.has(OVERVIEW_METRIC_KEYS.accountRecreated)
     ? t('metrics.help.trendsWithAccounts')
@@ -1860,13 +1972,17 @@ const loadOverview = async (context: ProjectRequestContext = captureProjectConte
   if (!requireProject()) return
   overviewLoading.value = true
   try {
-    const params = cleanParams({ projectId: context.projectId, ...rangeParams(context.snapshot) })
+    const params = cleanParams({
+      projectId: context.projectId,
+      propertyFilters: context.snapshot.propertyFilters,
+      ...rangeParams(context.snapshot),
+    })
     const overviewRes = await getMetricsOverview(params)
 
     if (!isCurrentProjectContext(context)) return
     overview.value = overviewRes.data.data
   } catch (error) {
-    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.overviewFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getAnalyticsQueryErrorMessage(error, t('errors.overviewFailed')))
   } finally {
     if (isCurrentProjectContext(context)) overviewLoading.value = false
   }
@@ -1880,6 +1996,7 @@ const loadAppVersions = async (context: ProjectRequestContext = captureProjectCo
   try {
     const response = await getAppVersionDistribution(cleanParams({
       projectId: context.projectId,
+      propertyFilters: context.snapshot.propertyFilters,
       ...rangeParams(context.snapshot),
     }))
     if (!isCurrentProjectContext(context)) return
@@ -1887,7 +2004,7 @@ const loadAppVersions = async (context: ProjectRequestContext = captureProjectCo
   } catch (error) {
     if (isCurrentProjectContext(context)) {
       appVersionsFailed.value = true
-      ElMessage.error(getErrorMessage(error, t('errors.appVersionsFailed')))
+      ElMessage.error(getAnalyticsQueryErrorMessage(error, t('errors.appVersionsFailed')))
     }
   } finally {
     if (isCurrentProjectContext(context)) appVersionsLoading.value = false
@@ -1902,11 +2019,16 @@ const loadTrends = async (context: ProjectRequestContext = captureProjectContext
     : context.snapshot.granularity
   trendsLoading.value = true
   try {
-    const res = await getMetricsTrends(cleanParams({ projectId: context.projectId, granularity, ...rangeParams(context.snapshot) }))
+    const res = await getMetricsTrends(cleanParams({
+      projectId: context.projectId,
+      granularity,
+      propertyFilters: context.snapshot.propertyFilters,
+      ...rangeParams(context.snapshot),
+    }))
     if (!isCurrentProjectContext(context)) return
     trends.value = res.data.data
   } catch (error) {
-    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.trendsFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getAnalyticsQueryErrorMessage(error, t('errors.trendsFailed')))
   } finally {
     if (isCurrentProjectContext(context)) trendsLoading.value = false
   }
@@ -1923,12 +2045,13 @@ const loadTopEvents = async (context: ProjectRequestContext = captureProjectCont
       projectId: context.projectId,
       limit: configuredLimit,
       aggregation,
+      propertyFilters: context.snapshot.propertyFilters,
       ...rangeParams(context.snapshot),
     }))
     if (!isCurrentProjectContext(context)) return
     topEvents.value = res.data.data
   } catch (error) {
-    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.topEventsFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getAnalyticsQueryErrorMessage(error, t('errors.topEventsFailed')))
   } finally {
     if (isCurrentProjectContext(context)) topEventsLoading.value = false
   }
@@ -2105,12 +2228,13 @@ const loadProductFunnel = async (context: ProjectRequestContext = captureProject
       steps: config.steps.join(','),
       groupBy: config.groupBy,
       journeyKey: config.journeyKey,
+      propertyFilters: context.snapshot.propertyFilters,
       ...rangeParams(context.snapshot),
     }))
     if (!isCurrentProjectContext(context)) return
     productFunnel.value = res.data.data
   } catch (error) {
-    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.productFunnelFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getAnalyticsQueryErrorMessage(error, t('errors.productFunnelFailed')))
   } finally {
     if (isCurrentProjectContext(context)) productFunnelLoading.value = false
   }
@@ -2131,12 +2255,13 @@ const loadRetention = async (context: ProjectRequestContext = captureProjectCont
       cohortEvent: config.cohortEvent,
       returnEvent: config.returnEvent,
       days: config.days.join(','),
+      propertyFilters: context.snapshot.propertyFilters,
       ...rangeParams(context.snapshot),
     }))
     if (!isCurrentProjectContext(context)) return
     retention.value = res.data.data
   } catch (error) {
-    if (isCurrentProjectContext(context)) ElMessage.error(getErrorMessage(error, t('errors.retentionFailed')))
+    if (isCurrentProjectContext(context)) ElMessage.error(getAnalyticsQueryErrorMessage(error, t('errors.retentionFailed')))
   } finally {
     if (isCurrentProjectContext(context)) retentionLoading.value = false
   }
@@ -2151,6 +2276,36 @@ const loadSemanticDefinitions = async () => {
     if (filters.projectId === projectId) semanticDefinitions.value = response.data.data.items
   } catch {
     if (filters.projectId === projectId) semanticDefinitions.value = []
+  }
+}
+
+const loadAnalyticsProperties = async () => {
+  const projectId = filters.projectId
+  if (!projectId) return
+  analyticsPropertiesLoading.value = true
+  try {
+    const response = await getAnalyticsPropertyDefinitions(projectId)
+    if (filters.projectId === projectId) analyticsProperties.value = response.data.data.items
+  } catch {
+    if (filters.projectId === projectId) analyticsProperties.value = []
+  } finally {
+    if (filters.projectId === projectId) analyticsPropertiesLoading.value = false
+  }
+}
+
+const loadTrustedSchemaPolicy = async (projectId: string, generation: number) => {
+  trustedSchemaPolicy.value = null
+  trustedSchemaPolicyLoadFailed.value = false
+  if (!projectId) return
+  try {
+    const response = await getTrustedSchemaPolicy(projectId)
+    if (generation !== workspaceGeneration || projectId !== filters.projectId) return
+    trustedSchemaPolicy.value = response.data.data
+    filters.propertyFilters = response.data.data ? [trustedSchemaFilter(response.data.data)] : []
+  } catch {
+    if (generation !== workspaceGeneration || projectId !== filters.projectId) return
+    trustedSchemaPolicyLoadFailed.value = true
+    filters.propertyFilters = []
   }
 }
 
@@ -2183,6 +2338,7 @@ const handleTrafficPageChange = (page: number) => {
 
 const applyFilters = async () => {
   if (!requireProject()) return
+  if (analyticsPropertyFiltersRef.value?.commit() === false) return
   resetPages()
   commitFilterSnapshot()
   await refreshAll()
@@ -2201,6 +2357,9 @@ const refreshAll = async () => {
     }
     if (widgetTypes.some((type) => type === 'core.productFunnel' || type === 'core.retention')) {
       loadPromises.push(loadSemanticDefinitions())
+    }
+    if (widgetTypes.includes('core.productFunnel')) {
+      loadPromises.push(loadAnalyticsProperties())
     }
     if (widgetTypes.some((type) => type === 'core.overview' || type === 'core.devices')) {
       loadPromises.push(loadAppVersions(context))
@@ -2449,6 +2608,7 @@ const clearProjectScopedState = () => {
   retention.value = null
   semanticEventCatalog.value = []
   semanticDefinitions.value = []
+  analyticsProperties.value = []
   widgetConfigDialogVisible.value = false
   widgetConfigType.value = ''
   widgetConfigTargetId.value = ''
@@ -2489,6 +2649,7 @@ const resetProjectDetailFilters = () => {
   filters.apiKey = ''
   filters.isBanned = ''
   filters.eventType = ''
+  filters.propertyFilters = []
 }
 
 const activateWorkspace = async (projectChanged: boolean) => {
@@ -2507,6 +2668,7 @@ const activateWorkspace = async (projectChanged: boolean) => {
   if (projectChanged) {
     serverDashboards.value = []
     clearProjectScopedState()
+    await loadTrustedSchemaPolicy(projectId, generation)
   }
 
   if (projectId && routeProjectId.value !== projectId) {
@@ -2600,6 +2762,8 @@ onUnmounted(() => {
   margin: 0 auto;
   color: #1d1d1f;
 }
+
+.trusted-analysis-scope { margin: -8px 0 18px; }
 
 .widget-size-fields {
   display: grid;
@@ -2774,6 +2938,13 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 12px;
   font-weight: 600;
+}
+
+.retention-observation-note {
+  margin: 0 0 8px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .table-header-help {

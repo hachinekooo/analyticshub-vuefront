@@ -268,6 +268,11 @@ import {
 } from '@/api/semantic'
 
 const { t, locale } = useI18n()
+const semanticErrorMessages = computed(() => ({
+  SEMANTIC_DEFINITION_IN_USE: t('semantics.errors.inUse'),
+}))
+const semanticErrorMessage = (error: unknown, fallback: string) =>
+  getErrorMessage(error, fallback, semanticErrorMessages.value)
 const route = useRoute()
 const projectContext = useProjectContextStore()
 const { selectedProjectId } = storeToRefs(projectContext)
@@ -352,7 +357,7 @@ const refreshAll = async () => {
     definitions.value = definitionsResponse.data.data.items
   } catch (error) {
     if (generation === refreshGeneration && projectId.value === requestedProjectId) {
-      ElMessage.error(getErrorMessage(error, t('semantics.errors.loadFailed')))
+      ElMessage.error(semanticErrorMessage(error, t('semantics.errors.loadFailed')))
     }
   } finally {
     if (generation === refreshGeneration && projectId.value === requestedProjectId) loading.value = false
@@ -451,7 +456,7 @@ const mapToExistingMeaning = async () => {
     mappingVisible.value = false
     await refreshAll()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('semantics.errors.saveFailed')))
+    ElMessage.error(semanticErrorMessage(error, t('semantics.errors.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -493,7 +498,7 @@ const saveDefinition = async () => {
     dialogVisible.value = false
     await refreshAll()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('semantics.errors.saveFailed')))
+    ElMessage.error(semanticErrorMessage(error, t('semantics.errors.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -511,7 +516,7 @@ const removeDefinition = async (definition: SemanticDefinition) => {
     await refreshAll()
   } catch (error) {
     if (error === 'cancel' || error === 'close') return
-    ElMessage.error(getErrorMessage(error, t('semantics.errors.deleteFailed')))
+    ElMessage.error(semanticErrorMessage(error, t('semantics.errors.deleteFailed')))
   }
 }
 
@@ -528,7 +533,7 @@ onMounted(async () => {
     projectId.value = routeProjectId.value || selectedProjectId.value
     await refreshAll()
   } catch (error) {
-    ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
+    ElMessage.error(semanticErrorMessage(error, t('messages.loadProjectsFailed')))
   }
 })
 </script>
