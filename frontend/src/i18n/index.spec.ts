@@ -95,4 +95,26 @@ describe('i18n locale resolution and fallback', () => {
       for (const key of keys) expect(t(key)).not.toBe(key)
     }
   })
+
+  it('localizes every governed metric type and its definition help', async () => {
+    const { setLocale, t } = await importI18n()
+    const metricTypes = [
+      'EVENT_COUNT',
+      'UNIQUE_ACTORS',
+      'FUNNEL_CONVERSION',
+      'RETENTION',
+      'PROPERTY_BREAKDOWN',
+      'NUMERIC_PROPERTY_SUMMARY',
+    ]
+
+    for (const language of ['zh', 'en'] as const) {
+      setLocale(language)
+      for (const metricType of metricTypes) {
+        const labelKey = `analysisConfig.metricTypes.${metricType}`
+        const helpKey = `analysisConfig.metrics.definitionHelp.${metricType}`
+        expect(t(labelKey)).not.toBe(labelKey)
+        expect(t(helpKey)).not.toBe(helpKey)
+      }
+    }
+  })
 })

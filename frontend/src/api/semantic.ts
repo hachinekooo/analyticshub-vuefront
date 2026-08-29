@@ -81,6 +81,8 @@ export type AnalyticsMetricType =
   | 'UNIQUE_ACTORS'
   | 'FUNNEL_CONVERSION'
   | 'RETENTION'
+  | 'PROPERTY_BREAKDOWN'
+  | 'NUMERIC_PROPERTY_SUMMARY'
 
 export type AnalyticsMetricDefinition = {
   projectId: string

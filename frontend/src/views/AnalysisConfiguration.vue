@@ -20,6 +20,7 @@ import {
   type AnalysisPackDetail,
   type AnalyticsMetricDefinition,
   type AnalyticsMetricResult,
+  type AnalyticsMetricType,
   type AnalyticsPropertyDataType,
   type AnalyticsPropertyDefinition,
   type SemanticDefinition,
@@ -136,6 +137,15 @@ const activeSemanticKeys = computed(() => semantics.value
   .filter(item => item.isActive)
   .map(item => item.semanticKey))
 
+const metricTypeOptions: AnalyticsMetricType[] = [
+  'EVENT_COUNT',
+  'UNIQUE_ACTORS',
+  'FUNNEL_CONVERSION',
+  'RETENTION',
+  'PROPERTY_BREAKDOWN',
+  'NUMERIC_PROPERTY_SUMMARY',
+]
+
 const defaultMetricDefinition = (type: AnalyticsMetricDefinition['metricType']) => {
   const [first = '', second = ''] = activeSemanticKeys.value
   const policy = trustedSchemaPolicy.value
@@ -144,6 +154,31 @@ const defaultMetricDefinition = (type: AnalyticsMetricDefinition['metricType']) 
     : []
   if (type === 'FUNNEL_CONVERSION') return { steps: [first, second], propertyFilters }
   if (type === 'RETENTION') return { cohortEvent: first, returnEvent: second, days: [1, 7, 30], propertyFilters }
+  if (type === 'PROPERTY_BREAKDOWN') {
+    const groupBy = properties.value.find(item =>
+      item.active && item.groupable && !item.sensitive
+      && item.propertyKey !== policy?.propertyKey,
+    )?.propertyKey || ''
+    return {
+      semanticEvent: first,
+      aggregation: 'EVENT_COUNT',
+      groupBy,
+      missingValuePolicy: 'INCLUDE',
+      propertyFilters,
+    }
+  }
+  if (type === 'NUMERIC_PROPERTY_SUMMARY') {
+    const numericProperty = properties.value.find(item =>
+      item.active && item.filterable && !item.sensitive
+      && (item.dataType === 'INTEGER' || item.dataType === 'NUMBER'),
+    )
+    return {
+      semanticEvent: first,
+      propertyKey: numericProperty?.propertyKey || '',
+      unit: numericProperty?.propertyKey.endsWith('_ms') ? 'MILLISECONDS' : 'NUMBER',
+      propertyFilters,
+    }
+  }
   return { semanticEvent: first, propertyFilters }
 }
 
@@ -180,6 +215,19 @@ const metricDefinitionSummary = (item: AnalyticsMetricDefinition) => {
   if (item.metricType === 'FUNNEL_CONVERSION') {
     const steps = Array.isArray(definition.steps) ? definition.steps.join(' → ') : '—'
     return t('analysisConfig.metrics.funnelSummary', { steps })
+  }
+  if (item.metricType === 'PROPERTY_BREAKDOWN') {
+    return t('analysisConfig.metrics.breakdownSummary', {
+      event: String(definition.semanticEvent || '—'),
+      property: String(definition.groupBy || '—'),
+    })
+  }
+  if (item.metricType === 'NUMERIC_PROPERTY_SUMMARY') {
+    return t('analysisConfig.metrics.numericSummary', {
+      event: String(definition.semanticEvent || '—'),
+      property: String(definition.propertyKey || '—'),
+      unit: String(definition.unit || '—'),
+    })
   }
   const days = Array.isArray(definition.days) ? definition.days.join(', ') : '—'
   return t('analysisConfig.metrics.retentionSummary', {
@@ -685,7 +733,7 @@ watch(projectId, () => {
         />
         <el-form-item :label="t('analysisConfig.fields.metricKey')" required><el-input v-model="metricForm.metricKey" :disabled="Boolean(editingMetricKey)" /></el-form-item>
         <el-row :gutter="16"><el-col :span="12"><el-form-item :label="t('analysisConfig.fields.zhName')"><el-input v-model="metricForm.zhName" /></el-form-item></el-col><el-col :span="12"><el-form-item :label="t('analysisConfig.fields.enName')"><el-input v-model="metricForm.enName" /></el-form-item></el-col></el-row>
-        <el-form-item :label="t('analysisConfig.fields.metricType')"><el-select v-model="metricForm.metricType" :disabled="Boolean(editingMetricKey)" style="width: 100%"><el-option v-for="type in ['EVENT_COUNT','UNIQUE_ACTORS','FUNNEL_CONVERSION','RETENTION']" :key="type" :value="type" :label="metricTypeLabel(type as AnalyticsMetricDefinition['metricType'])" /></el-select></el-form-item>
+        <el-form-item :label="t('analysisConfig.fields.metricType')"><el-select v-model="metricForm.metricType" :disabled="Boolean(editingMetricKey)" style="width: 100%"><el-option v-for="type in metricTypeOptions" :key="type" :value="type" :label="metricTypeLabel(type)" /></el-select></el-form-item>
         <el-form-item :label="t('analysisConfig.fields.definition')" required><el-input v-model="metricForm.definitionJson" type="textarea" :rows="10" class="json-editor" /><div class="field-help">{{ t(`analysisConfig.metrics.definitionHelp.${metricForm.metricType}`) }}</div></el-form-item>
         <el-alert
           v-if="trustedSchemaPolicy"

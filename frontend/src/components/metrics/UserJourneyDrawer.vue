@@ -116,9 +116,12 @@
                 <code :title="event.sessionId">{{ compactIdentifier(event.sessionId) }}</code>
               </span>
             </div>
-            <pre v-if="detailsExpanded && event.properties" class="journey-event-properties">{{
-              formattedPropertiesByEvent.get(event.eventId)
-            }}</pre>
+            <EventPropertiesPreview
+              v-if="detailsExpanded && event.properties"
+              :value="event.properties"
+              :definitions="propertyDefinitions"
+              inline
+            />
             <el-button
               v-else-if="detailsExpanded && event.propertiesDeferred && event.propertiesLoadable"
               class="journey-deferred-properties"
@@ -148,6 +151,8 @@ import { computed, ref, watch } from 'vue'
 import { ElRadioButton, ElRadioGroup } from 'element-plus'
 import type { EventJourney, EventRecord } from '@/api/metrics'
 import SemanticEventLabel from '@/components/metrics/SemanticEventLabel.vue'
+import EventPropertiesPreview from '@/components/metrics/EventPropertiesPreview.vue'
+import type { AnalyticsPropertyDefinition } from '@/api/semantic'
 import type { SemanticEventPresentation } from '@/features/metrics/semanticEventPresentation'
 import {
   USER_JOURNEY_WINDOWS,
@@ -155,7 +160,7 @@ import {
 } from '@/features/metrics/userJourney'
 import { useI18n } from '@/i18n'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: boolean
   anchorEvent: EventRecord | null
   journey: EventJourney | null
@@ -163,7 +168,8 @@ const props = defineProps<{
   windowKey: UserJourneyWindow
   propertiesLoadingEventIds: string[]
   presentEvent: (eventKey: string) => SemanticEventPresentation
-}>()
+  propertyDefinitions?: AnalyticsPropertyDefinition[]
+}>(), { propertyDefinitions: () => [] })
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -206,12 +212,6 @@ const identityScopeLabel = (scope: string | null) => {
 
 const compactIdentifier = (value: string) =>
   value.length <= 14 ? value : `${value.slice(0, 6)}…${value.slice(-6)}`
-
-const formattedPropertiesByEvent = computed(() => new Map(
-  (props.journey?.items ?? [])
-    .filter(event => event.properties)
-    .map(event => [event.eventId, JSON.stringify(event.properties, null, 2)]),
-))
 
 watch(
   () => [props.modelValue, props.anchorEvent?.eventId] as const,

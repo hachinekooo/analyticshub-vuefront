@@ -18,7 +18,7 @@ export type DashboardWidgetDefinition = {
 }
 
 export type DashboardDefinition = {
-  schemaVersion: 1
+  schemaVersion: 1 | 2
   defaultRange?: '24h' | '7d' | '30d' | '90d' | 'custom'
   widgets: DashboardWidgetDefinition[]
 }
@@ -40,7 +40,7 @@ export type AdminDashboard = {
 export type DashboardUpsertPayload = {
   displayName: Record<string, string>
   description?: string
-  schemaVersion: 1
+  schemaVersion: 1 | 2
   definition: DashboardDefinition
   expectedRevision: number
   isDefault: boolean

@@ -66,6 +66,17 @@ describe('AnalysisConfiguration safety policy', () => {
     expect(source).not.toMatch(/event_schema_version[^\n]*['"]3['"]/)
   })
 
+  it('supports every backend governed metric type in the management form', () => {
+    expect(source).toContain("'PROPERTY_BREAKDOWN'")
+    expect(source).toContain("'NUMERIC_PROPERTY_SUMMARY'")
+    expect(source).toContain("aggregation: 'EVENT_COUNT'")
+    expect(source).toContain("missingValuePolicy: 'INCLUDE'")
+    expect(source).toContain("unit: numericProperty?.propertyKey.endsWith('_ms') ? 'MILLISECONDS' : 'NUMBER'")
+    expect(source).toContain('v-for="type in metricTypeOptions"')
+    expect(source).toContain("t('analysisConfig.metrics.breakdownSummary'")
+    expect(source).toContain("t('analysisConfig.metrics.numericSummary'")
+  })
+
   it('marks cross-version definitions and calculated results as diagnostic', () => {
     expect(source).toContain("row.definition.schemaScope === 'CROSS_VERSION_VERIFIED'")
     expect(source).toContain("metricResult.resultClassification === 'CROSS_VERSION_DIAGNOSTIC'")

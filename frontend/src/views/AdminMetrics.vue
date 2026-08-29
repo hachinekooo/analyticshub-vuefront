@@ -265,6 +265,18 @@
                   :refresh-token="extensionRefreshToken"
                 />
 
+                <GovernedMetricWidget
+                  v-else-if="isWidgetType(item, 'core.governedMetric')"
+                  class="widget-content"
+                  :project-id="filters.projectId"
+                  :metric-key="typeof item.config?.metricKey === 'string' ? item.config.metricKey : ''"
+                  :title="getWidgetLabel(item)"
+                  :definition="metricDefinitionForWidget(item)"
+                  :semantic-definitions="semanticDefinitions"
+                  :date-range="extensionDateRange"
+                  :refresh-token="extensionRefreshToken"
+                />
+
                 <!-- Traffic Table Widget -->
                 <div v-else-if="isWidgetType(item, 'core.traffic')" class="widget-content" v-loading="trafficLoading">
                    <div class="widget-header">
@@ -334,7 +346,7 @@
                       </el-table-column>
                       <el-table-column prop="properties" :label="t('tables.properties')" min-width="240">
                          <template #default="{ row }">
-                           <EventPropertiesPreview :value="row.properties" />
+                           <EventPropertiesPreview :value="row.properties" :definitions="analyticsProperties" />
                          </template>
                       </el-table-column>
                       <el-table-column :label="t('buttons.actions')" width="108" fixed="right">
@@ -507,6 +519,29 @@
           <p class="form-tip">{{ t('metrics.widgetConfig.counterKeysTip') }}</p>
         </template>
 
+        <template v-else-if="widgetConfigType === 'core.governedMetric'">
+          <el-form-item :label="t('metrics.widgetConfig.governedMetric')" required>
+            <el-select
+              v-model="widgetConfigForm.metricKey"
+              filterable
+              style="width: 100%"
+              :loading="analyticsMetricDefinitionsLoading"
+              :placeholder="t('metrics.widgetConfig.governedMetricPlaceholder')"
+            >
+              <el-option
+                v-for="metric in activeAnalyticsMetricDefinitions"
+                :key="metric.metricKey"
+                :label="localizedMetricName(metric)"
+                :value="metric.metricKey"
+              >
+                <span>{{ localizedMetricName(metric) }}</span>
+                <small class="metric-option-key">{{ metric.metricKey }}</small>
+              </el-option>
+            </el-select>
+          </el-form-item>
+          <p class="form-tip">{{ t('metrics.widgetConfig.governedMetricTip') }}</p>
+        </template>
+
         <template v-else-if="widgetConfigType === 'core.productFunnel'">
           <el-form-item :label="t('metrics.widgetConfig.funnelSteps')" required>
             <el-select
@@ -606,6 +641,7 @@
       :window-key="userJourneyWindow"
       :properties-loading-event-ids="userJourneyPropertiesLoading"
       :present-event="eventPresentation"
+      :property-definitions="analyticsProperties"
       @update:model-value="setUserJourneyVisible"
       @update:window-key="updateUserJourneyWindow"
       @reload="loadUserJourney"
@@ -637,6 +673,7 @@ import EventPropertiesPreview from '@/components/metrics/EventPropertiesPreview.
 import UserJourneyDrawer from '@/components/metrics/UserJourneyDrawer.vue'
 import OrderedSelectionEditor, { type OrderedSelectionOption } from '@/components/metrics/OrderedSelectionEditor.vue'
 import CounterDisplayWidget from '@/features/counters/CounterDisplayWidget.vue'
+import GovernedMetricWidget from '@/components/metrics/GovernedMetricWidget.vue'
 import AnalyticsPropertyFilters from '@/features/analytics/AnalyticsPropertyFilters.vue'
 import { trustedSchemaFilter, trustedSchemaScopeValues } from '@/features/analytics/trustedAnalyticsScope'
 import { useProjectContextStore } from '@/stores/projectContext'
@@ -685,10 +722,12 @@ import {
   getSemanticDefinitions,
   getAnalyticsPropertyDefinitions,
   getTrustedSchemaPolicy,
+  getAnalyticsMetricDefinitions,
   type EventCatalogEntry,
   type SemanticDefinition,
   type AnalyticsPropertyDefinition,
   type TrustedSchemaPolicy,
+  type AnalyticsMetricDefinition,
 } from '@/api/semantic'
 import {
   getProjectDashboards,
@@ -909,6 +948,8 @@ const semanticEventCatalog = ref<EventCatalogEntry[]>([])
 const semanticDefinitions = ref<SemanticDefinition[]>([])
 const analyticsProperties = ref<AnalyticsPropertyDefinition[]>([])
 const analyticsPropertiesLoading = ref(false)
+const analyticsMetricDefinitions = ref<AnalyticsMetricDefinition[]>([])
+const analyticsMetricDefinitionsLoading = ref(false)
 const trustedSchemaPolicy = ref<TrustedSchemaPolicy | null>(null)
 const trustedSchemaPolicyLoadFailed = ref(false)
 
@@ -1001,6 +1042,7 @@ const widgetConfigForm = reactive({
   initialOverviewMetricKeys: [] as string[],
   counterKeys: [] as string[],
   initialCounterKeys: [] as string[],
+  metricKey: '',
 })
 const counterOptions = ref<CounterItem[]>([])
 const counterOptionsLoading = ref(false)
@@ -1018,6 +1060,9 @@ const groupableProperties = computed(() => analyticsProperties.value
 const journeyKeyProperties = computed(() => analyticsProperties.value
   .filter((item) => item.active && item.journeyKey && !item.sensitive)
   .sort((left, right) => left.propertyKey.localeCompare(right.propertyKey)))
+const activeAnalyticsMetricDefinitions = computed(() => analyticsMetricDefinitions.value
+  .filter(metric => metric.active)
+  .sort((left, right) => localizedMetricName(left).localeCompare(localizedMetricName(right))))
 const availableOverviewMetricKeySet = computed(() => new Set(
   resolveOverviewMetricKeys(undefined, overview.value?.availableMetricKeys ?? []),
 ))
@@ -1044,6 +1089,8 @@ const localizedCounterText = (value: Record<string, string> | string | null) => 
     : ['en', 'default', 'zh-CN', 'zh']
   return preferred.map(key => value[key]).find(Boolean) || Object.values(value)[0] || ''
 }
+const localizedMetricName = (metric: AnalyticsMetricDefinition) =>
+  localizedCounterText(metric.displayName) || metric.metricKey
 const counterSelectionOptions = computed<OrderedSelectionOption[]>(() => {
   const availableOptions = counterOptions.value.map(counter => ({
     key: counter.key,
@@ -1155,6 +1202,7 @@ const widgetLabelKeys: Record<string, string> = {
   'core.topPages': 'metrics.topPages',
   'core.topReferrers': 'metrics.topReferrers',
   'core.counters': 'metrics.counters',
+  'core.governedMetric': 'metrics.governedMetric.title',
   'core.events': 'metrics.events',
   'core.devices': 'metrics.devices',
   'core.sessions': 'metrics.sessions',
@@ -1222,7 +1270,8 @@ const cancelLayoutEditing = () => {
 const availableWidgetTypes = computed(() => {
   const present = new Set(dashboardLayout.value.map((item) => resolvedWidgetType(item)))
   const coreWidgets = activeSpaceDefinition.value.widgetTemplates
-    .filter((item) => item.type && !present.has(item.type))
+    .filter((item) => item.type
+      && (item.type === 'core.governedMetric' || !present.has(item.type)))
     .map((item) => ({
       type: item.type as string,
       label: t(widgetLabelKeys[item.type as string] || 'metrics.dashboardUnsupportedWidget'),
@@ -1262,7 +1311,8 @@ const appendExtensionWidget = (type: string) => {
 }
 
 const appendWidgetType = (type: string, config?: Record<string, unknown>) => {
-  if (dashboardLayout.value.some((item) => resolvedWidgetType(item) === type)) return
+  if (type !== 'core.governedMetric'
+    && dashboardLayout.value.some((item) => resolvedWidgetType(item) === type)) return
   const template = activeSpaceDefinition.value.widgetTemplates.find((item) => item.type === type)
   if (!template) return
   const nextY = dashboardLayout.value.reduce(
@@ -1317,6 +1367,7 @@ const resetWidgetConfigForm = () => {
     initialOverviewMetricKeys: [],
     counterKeys: [],
     initialCounterKeys: [],
+    metricKey: '',
   })
 }
 
@@ -1397,6 +1448,12 @@ const openWidgetConfig = (item: DashboardItem) => {
       ? item.config.days.filter((day): day is number => Number.isInteger(day)).join(', ')
       : '1, 7, 30'
   }
+  if (type === 'core.governedMetric') {
+    widgetConfigForm.metricKey = typeof item.config?.metricKey === 'string'
+      ? item.config.metricKey
+      : ''
+    void loadAnalyticsMetricDefinitions()
+  }
   widgetConfigDialogVisible.value = true
   if (type === 'core.productFunnel') {
     void Promise.all([loadSemanticDefinitions(), loadAnalyticsProperties()])
@@ -1406,12 +1463,14 @@ const openWidgetConfig = (item: DashboardItem) => {
 }
 
 const addWidgetType = (type: string) => {
-  if (dashboardLayout.value.some((item) => resolvedWidgetType(item) === type)) return
+  if (type !== 'core.governedMetric'
+    && dashboardLayout.value.some((item) => resolvedWidgetType(item) === type)) return
   if (getDashboardWidgetExtension(type)) {
     appendExtensionWidget(type)
     return
   }
   if (type === 'core.overview' || type === 'core.counters'
+    || type === 'core.governedMetric'
     || type === 'core.productFunnel' || type === 'core.retention') {
     resetWidgetConfigForm()
     widgetConfigTargetId.value = ''
@@ -1419,6 +1478,7 @@ const addWidgetType = (type: string) => {
     widgetConfigDialogVisible.value = true
     if (type === 'core.overview') void prepareOverviewMetricSelection(true)
     else if (type === 'core.counters') void loadCounterConfigurationOptions(false)
+    else if (type === 'core.governedMetric') void loadAnalyticsMetricDefinitions()
     else if (type === 'core.productFunnel') {
       void Promise.all([loadSemanticDefinitions(), loadAnalyticsProperties()])
     } else {
@@ -1501,6 +1561,14 @@ const confirmConfiguredWidget = () => {
     config.cohortEvent = cohortEvent
     config.returnEvent = returnEvent
     config.days = days
+  } else if (type === 'core.governedMetric') {
+    const metricKey = widgetConfigForm.metricKey.trim()
+    if (!validAnalyticsKey(metricKey)
+      || !activeAnalyticsMetricDefinitions.value.some(metric => metric.metricKey === metricKey)) {
+      ElMessage.warning(t('metrics.widgetConfig.invalidGovernedMetric'))
+      return
+    }
+    config.metricKey = metricKey
   }
 
   widgetConfigDialogVisible.value = false
@@ -1754,9 +1822,18 @@ const getWidgetLabel = (item: DashboardItem) => {
     return item.config.title.trim()
   }
   const type = resolvedWidgetType(item)
+  if (type === 'core.governedMetric') {
+    const definition = metricDefinitionForWidget(item)
+    if (definition) return localizedMetricName(definition)
+  }
   const extension = getDashboardWidgetExtension(type)
   if (extension) return extensionDisplayName(extension)
   return type && widgetLabelKeys[type] ? t(widgetLabelKeys[type]) : item.i
+}
+
+const metricDefinitionForWidget = (item: DashboardItem) => {
+  const metricKey = typeof item.config?.metricKey === 'string' ? item.config.metricKey : ''
+  return analyticsMetricDefinitions.value.find(metric => metric.metricKey === metricKey)
 }
 
 const hasCustomWidgetTitle = (item: DashboardItem) =>
@@ -1779,7 +1856,8 @@ const toServerDefinition = (): DashboardDefinition | null => {
   const widgetTypes = new Set<string>()
   for (const item of dashboardLayout.value) {
     const type = resolvedWidgetType(item)
-    if (!type || widgetIds.has(item.i) || widgetTypes.has(type)) return null
+    if (!type || widgetIds.has(item.i)
+      || (type !== 'core.governedMetric' && widgetTypes.has(type))) return null
     const extension = getDashboardWidgetExtension(type)
     if (!widgetLabelKeys[type] && (!extension || !extension.spaces.includes(activeSpace.value))) {
       return null
@@ -1811,7 +1889,7 @@ const toServerDefinition = (): DashboardDefinition | null => {
     })
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     defaultRange: dashboardDefaultRange.value,
     widgets,
   }
@@ -1833,7 +1911,7 @@ const saveServerDashboard = async () => {
     const response = await upsertProjectDashboard(projectId, space, {
       displayName: spaceDefinition.displayName,
       description: spaceDefinition.description,
-      schemaVersion: 1,
+      schemaVersion: 2,
       definition,
       expectedRevision: existing?.revision ?? 0,
       isDefault: dashboardSpaces.value[0]?.key === space,
@@ -2293,6 +2371,20 @@ const loadAnalyticsProperties = async () => {
   }
 }
 
+const loadAnalyticsMetricDefinitions = async () => {
+  const projectId = filters.projectId
+  if (!projectId) return
+  analyticsMetricDefinitionsLoading.value = true
+  try {
+    const response = await getAnalyticsMetricDefinitions(projectId)
+    if (filters.projectId === projectId) analyticsMetricDefinitions.value = response.data.data
+  } catch {
+    if (filters.projectId === projectId) analyticsMetricDefinitions.value = []
+  } finally {
+    if (filters.projectId === projectId) analyticsMetricDefinitionsLoading.value = false
+  }
+}
+
 const loadTrustedSchemaPolicy = async (projectId: string, generation: number) => {
   trustedSchemaPolicy.value = null
   trustedSchemaPolicyLoadFailed.value = false
@@ -2355,11 +2447,14 @@ const refreshAll = async () => {
     if (widgetTypes.some((type) => type === 'core.topEvents' || type === 'core.events')) {
       loadPromises.push(loadSemanticEventCatalog(context))
     }
-    if (widgetTypes.some((type) => type === 'core.productFunnel' || type === 'core.retention')) {
+    if (widgetTypes.some((type) => type === 'core.productFunnel' || type === 'core.retention' || type === 'core.governedMetric')) {
       loadPromises.push(loadSemanticDefinitions())
     }
-    if (widgetTypes.includes('core.productFunnel')) {
+    if (widgetTypes.includes('core.productFunnel') || widgetTypes.includes('core.events')) {
       loadPromises.push(loadAnalyticsProperties())
+    }
+    if (widgetTypes.includes('core.governedMetric')) {
+      loadPromises.push(loadAnalyticsMetricDefinitions())
     }
     if (widgetTypes.some((type) => type === 'core.overview' || type === 'core.devices')) {
       loadPromises.push(loadAppVersions(context))
@@ -2609,6 +2704,7 @@ const clearProjectScopedState = () => {
   semanticEventCatalog.value = []
   semanticDefinitions.value = []
   analyticsProperties.value = []
+  analyticsMetricDefinitions.value = []
   widgetConfigDialogVisible.value = false
   widgetConfigType.value = ''
   widgetConfigTargetId.value = ''

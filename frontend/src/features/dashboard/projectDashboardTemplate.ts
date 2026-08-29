@@ -67,6 +67,7 @@ const productWidgets: readonly DashboardLayoutItem[] = [
   { x: 0, y: 0, w: 12, h: 10, i: 'productFunnel_template', type: 'core.productFunnel', minW: 6, minH: 6 },
   { x: 0, y: 0, w: 6, h: 10, i: 'retention_template', type: 'core.retention', minW: 4, minH: 6 },
   { x: 0, y: 0, w: 12, h: 8, i: 'counters_template', type: 'core.counters', minW: 4, minH: 4 },
+  { x: 0, y: 0, w: 6, h: 8, i: 'governedMetric_template', type: 'core.governedMetric', minW: 4, minH: 5 },
 ]
 
 const buildSpaceDefinitions = (
