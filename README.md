@@ -13,7 +13,7 @@ AnalyticsHub 的 Vue 3 管理端。应用以 `/analyticshub/` 为默认部署路
 
 ## 职责边界
 
-- `frontend/`：Vue 3 + Vite 管理端，包括多项目工作区、运营中心、语义字典和隐私工单。
+- `frontend/`：Vue 3 + Vite 管理端，包括多项目工作区、运营中心、分析配置、语义字典和隐私工单。
 - `docs/PROJECT_WORKSPACE.md`：项目导航、分析模板、Dashboard 状态与扩展边界。
 - `docs/DEPLOYMENT.md`：只维护前端构建、静态产物和页面验收。
 - Nginx、证书、后端 JAR、systemd 和数据库由 `analyticshub-javaback` 的运维文档统一维护。
@@ -40,6 +40,8 @@ pnpm dev
 只需预览页面时，可先执行 `pnpm build`，再运行 `pnpm mock:preview`。Mock 用于验证页面、空态、基本请求形状和低成本的声明式合同；它不复制生产后端的事务、所有权、跨 Pack 依赖引擎或数据库资源预算。需要验证迁移、checksum、并发导入、失败回滚、查询行数上限或 statement timeout 时，必须连接真实本地后端与 PostgreSQL。
 
 项目配置 `trustedSchemaPolicy` 后，Dashboard 会把该范围作为概览、App 版本、趋势、事件排行、漏斗和留存的默认筛选，并在页面明确显示当前是可信运营范围还是跨版本诊断范围。事件明细始终保留原始事实；管理员主动移除可信筛选时，页面不会把混合合同版本的结果标成稳定 KPI。
+
+“分析配置”负责登记可筛选、分组或串联的属性，并集中定义六类受治理指标；Dashboard 的“运营指标”组件只引用已启用的 `metricKey`，不会在组件内复制计算口径。事件明细优先展示受治理属性的业务名称和值域说明，同时保留格式化原始 JSON 供诊断；属性治理因此不是简单汉化，也不会改写原始事件。
 
 ## 工程门禁
 
