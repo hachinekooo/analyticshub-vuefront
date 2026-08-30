@@ -162,4 +162,32 @@ describe('AnalyticsPropertyFilters', () => {
       { propertyKey: 'campaign', operator: 'EQ', values: ['A,B'] },
     ])
   })
+
+  it('allows the twelfth filter row and rejects the thirteenth', async () => {
+    vi.mocked(getAnalyticsPropertyDefinitions).mockResolvedValue(response('project_a', 'event_schema_version') as never)
+    const modelValue = Array.from({ length: 11 }, (_, index) => ({
+      propertyKey: `property_${index}`,
+      operator: 'EXISTS' as const,
+      values: [],
+    }))
+    const wrapper = mount(AnalyticsPropertyFilters, {
+      props: { projectId: 'project_a', modelValue },
+      global: {
+        stubs: {
+          ElButton: ButtonStub,
+          ElSelect: SlotStub,
+          ElOption: OptionStub,
+          ElInput: true,
+        },
+      },
+    })
+    await flushPromises()
+
+    const addButton = wrapper.find('.filter-heading button')
+    await addButton.trigger('click')
+    expect(wrapper.findAll('.filter-row')).toHaveLength(12)
+
+    await addButton.trigger('click')
+    expect(wrapper.findAll('.filter-row')).toHaveLength(12)
+  })
 })

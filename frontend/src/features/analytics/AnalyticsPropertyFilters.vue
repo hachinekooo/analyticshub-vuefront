@@ -17,6 +17,7 @@ const loading = ref(false)
 let loadGeneration = 0
 
 type EditableFilter = { propertyKey: string; operator: AnalyticsPropertyFilterOperator; values: string[] }
+const MAX_PROPERTY_FILTERS = 12
 const rows = ref<EditableFilter[]>([])
 
 const localizedName = (item: AnalyticsPropertyDefinition) => {
@@ -89,7 +90,7 @@ const commit = () => {
 }
 
 const add = () => {
-  if (rows.value.length >= 8) return
+  if (rows.value.length >= MAX_PROPERTY_FILTERS) return
   rows.value.push({ propertyKey: '', operator: 'EQ', values: [] })
 }
 
@@ -124,7 +125,7 @@ watch(() => props.modelValue, syncFromModel, { deep: true, immediate: true })
         <strong>{{ t('analyticsFilters.title') }}</strong>
         <span>{{ t('analyticsFilters.help') }}</span>
       </div>
-      <el-button size="small" plain :disabled="rows.length >= 8 || definitions.length === 0" @click="add">
+      <el-button size="small" plain :disabled="rows.length >= MAX_PROPERTY_FILTERS || definitions.length === 0" @click="add">
         {{ t('analyticsFilters.add') }}
       </el-button>
     </div>

@@ -34,6 +34,12 @@ beforeAll(async () => {
 afterAll(() => mockProcess?.kill())
 
 describe('mock server analytics contracts', () => {
+  it('keeps the mock property-filter budget aligned with AnalyticsHub 1.1.2', () => {
+    expect(source).toContain('filters.length > 12')
+    expect(source).toContain('propertyFilters must contain at most 12 items')
+    expect(source).not.toContain('filters.length > 8')
+  })
+
   it('keeps event catalog and top-event facts project-scoped', async () => {
     const catalog = await request('/admin/projects/demo_marketing/event-catalog')
     const topEvents = await request('/admin/metrics/top-events?projectId=demo_marketing')

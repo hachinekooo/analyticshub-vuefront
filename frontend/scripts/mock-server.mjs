@@ -509,8 +509,8 @@ const filteredEventRowsFor = (projectId, url, defaultDays = 7) => {
   } catch {
     return { rows: [], error: filterError('propertyFilters must be a JSON array') }
   }
-  if (!Array.isArray(filters) || filters.length > 8) {
-    return { rows: [], error: filterError('propertyFilters must contain at most 8 items') }
+  if (!Array.isArray(filters) || filters.length > 12) {
+    return { rows: [], error: filterError('propertyFilters must contain at most 12 items') }
   }
   const definitions = analyticsProperties.get(projectId) || []
   const seenKeys = new Set()
@@ -891,7 +891,7 @@ const validateMockMetricDefinition = (projectId, metric, definitions, policy) =>
         || metric.definition.days.some(day => !Number.isInteger(day) || day < 0 || day > 90))) return 'Retention days are invalid'
   }
   const filters = metric.definition.propertyFilters || []
-  if (!Array.isArray(filters) || filters.length > 8) return 'Metric propertyFilters is invalid'
+  if (!Array.isArray(filters) || filters.length > 12) return 'Metric propertyFilters is invalid'
   const filterKeys = new Set()
   for (const filter of filters) {
     const definition = definitions.find(item => item.propertyKey === filter?.propertyKey)
