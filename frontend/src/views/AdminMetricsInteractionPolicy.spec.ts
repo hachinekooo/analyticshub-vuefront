@@ -29,6 +29,13 @@ describe('AdminMetrics layout-editing interaction policy', () => {
     expect(source).not.toContain("type === 'core.overview' && !Array.isArray(config?.metricKeys)")
   })
 
+  it('keeps an explicitly enabled empty workspace understandable and directly editable', () => {
+    expect(source).toContain('layoutVisible && dashboardLayout.length === 0')
+    expect(source).toContain("t('metrics.emptyWorkspace')")
+    expect(source).toContain("t('metrics.emptyWorkspaceAction')")
+    expect(source).toContain('@click="startLayoutEditing"')
+  })
+
   it('clears project-scoped property filters and uses the committed snapshot for all supported views', () => {
     expect(source).toContain('filters.propertyFilters = []')
     expect(source.match(/propertyFilters: context\.snapshot\.propertyFilters/g)?.length).toBeGreaterThanOrEqual(6)

@@ -12,6 +12,7 @@
 
     <el-alert v-if="errorMessage" type="error" :closable="false" :title="errorMessage" />
     <el-empty v-else-if="!result" :description="t('metrics.noData')" :image-size="54" />
+    <el-empty v-else-if="isEmptyResult" :description="t('metrics.noData')" :image-size="54" />
 
     <div v-else-if="result.metricType === 'PROPERTY_BREAKDOWN'" class="breakdown-list">
       <div v-for="row in breakdownRows" :key="row.missing ? '__missing__' : (row.value || '__empty__')" class="breakdown-row">
@@ -182,6 +183,24 @@ const scalarValue = computed(() => {
   if (result.value?.metricType === 'EVENT_COUNT') return result.value.result.occurrences
   if (result.value?.metricType === 'UNIQUE_ACTORS') return result.value.result.actors
   return undefined
+})
+const isEmptyResult = computed(() => {
+  if (!result.value) return false
+  switch (result.value.metricType) {
+    case 'PROPERTY_BREAKDOWN':
+      return breakdownRows.value.length === 0
+    case 'FUNNEL_CONVERSION':
+      return funnelGroups.value.length === 0
+    case 'NUMERIC_PROPERTY_SUMMARY':
+      return typeof numericResult.value.sampleCount !== 'number'
+        || numericResult.value.sampleCount <= 0
+    case 'RETENTION':
+      return retentionBuckets.value.length === 0
+        && !(typeof retentionResult.value.cohortUsers === 'number'
+          && retentionResult.value.cohortUsers > 0)
+    default:
+      return false
+  }
 })
 const formatNumber = (value: unknown) => typeof value === 'number'
   ? new Intl.NumberFormat(locale.value).format(value)

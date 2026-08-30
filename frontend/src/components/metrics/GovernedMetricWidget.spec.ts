@@ -43,7 +43,7 @@ const mountWidget = () => mount(GovernedMetricWidget, {
     stubs: {
       ElTag: { template: '<span><slot /></span>' },
       ElAlert: true,
-      ElEmpty: true,
+      ElEmpty: { props: ['description'], template: '<div class="metric-empty">{{ description }}</div>' },
       ElProgress: { props: ['percentage'], template: '<i :data-percentage="percentage" />' },
     },
   },
@@ -84,10 +84,25 @@ describe('GovernedMetricWidget', () => {
     const wrapper = mountWidget()
     await flushPromises()
 
-    expect(wrapper.text()).toContain('全部用户')
+    expect(wrapper.text()).toContain('全部纳入统计的参与者')
+    expect(wrapper.text()).not.toContain('全部用户')
     expect(wrapper.text()).toContain('完成购买')
     expect(wrapper.text()).not.toContain('purchase_succeeded')
     expect(wrapper.text()).toContain('30%')
+  })
+
+  it.each([
+    ['PROPERTY_BREAKDOWN', { rows: [] }],
+    ['FUNNEL_CONVERSION', { groups: [] }],
+    ['NUMERIC_PROPERTY_SUMMARY', { sampleCount: 0 }],
+    ['RETENTION', { cohortUsers: 0, buckets: [] }],
+  ])('explains an empty %s result instead of leaving a blank card', async (metricType, result) => {
+    vi.mocked(getAnalyticsMetricResult).mockResolvedValue(response(metricType, result) as never)
+
+    const wrapper = mountWidget()
+    await flushPromises()
+
+    expect(wrapper.get('.metric-empty').text()).toBe('暂无数据')
   })
 
   it('clears stale results and loading when the widget becomes invalid during a request', async () => {

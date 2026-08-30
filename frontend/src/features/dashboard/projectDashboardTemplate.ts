@@ -1,6 +1,7 @@
 import type { ProjectAnalysisTemplate } from '@/api/admin'
+import type { AdminDashboard } from '@/api/dashboard'
 
-export type DashboardSpaceKey = 'overview' | 'details'
+export type DashboardSpaceKey = string
 
 export interface DashboardLayoutItem {
   x: number
@@ -16,12 +17,13 @@ export interface DashboardLayoutItem {
 
 export interface DashboardSpaceDefinition {
   key: DashboardSpaceKey
-  labelKey: string
+  labelKey?: string
   displayName: Readonly<Record<string, string>>
   description: string
   defaultLayout: readonly DashboardLayoutItem[]
   widgetTemplates: readonly DashboardLayoutItem[]
   detailFilters: boolean
+  projectDeclared?: boolean
 }
 
 const appLayout: readonly DashboardLayoutItem[] = [
@@ -105,6 +107,54 @@ const templateSpaces: Readonly<Record<ProjectAnalysisTemplate, readonly Dashboar
 /** Returns the stable workspace contract initialized by a project's analysis template. */
 export const dashboardSpacesForTemplate = (template: ProjectAnalysisTemplate) =>
   templateSpaces[template]
+
+const dashboardLayoutFromDefinition = (dashboard: AdminDashboard): DashboardLayoutItem[] =>
+  dashboard.definition.widgets.map((widget) => ({
+    i: widget.id,
+    type: widget.type,
+    config: widget.config ? JSON.parse(JSON.stringify(widget.config)) : undefined,
+    x: widget.layout.x,
+    y: widget.layout.y,
+    w: widget.layout.w,
+    h: widget.layout.h,
+    minW: widget.layout.minW,
+    minH: widget.layout.minH,
+  }))
+
+/**
+ * 合并模板自带工作区与项目声明的 Dashboard。入口由显式配置决定，
+ * 不依赖查询窗口内是否已经产生事件，避免空数据导致导航忽隐忽现。
+ */
+export const dashboardSpacesForProject = (
+  template: ProjectAnalysisTemplate,
+  dashboards: readonly AdminDashboard[],
+): readonly DashboardSpaceDefinition[] => {
+  const activeDashboards = dashboards.filter((dashboard) => dashboard.isActive)
+  const activeByKey = new Map(activeDashboards.map((dashboard) => [dashboard.dashboardKey, dashboard]))
+  const builtInSpaces = dashboardSpacesForTemplate(template).map((space) => {
+    const dashboard = activeByKey.get(space.key)
+    if (!dashboard || space.detailFilters) return space
+    return {
+      ...space,
+      displayName: dashboard.displayName,
+      description: dashboard.description || space.description,
+      defaultLayout: dashboardLayoutFromDefinition(dashboard),
+    }
+  })
+  const builtInKeys = new Set(builtInSpaces.map((space) => space.key))
+  const declaredSpaces = activeDashboards
+    .filter((dashboard) => !builtInKeys.has(dashboard.dashboardKey))
+    .map((dashboard): DashboardSpaceDefinition => ({
+      key: dashboard.dashboardKey,
+      displayName: dashboard.displayName,
+      description: dashboard.description || '',
+      defaultLayout: dashboardLayoutFromDefinition(dashboard),
+      widgetTemplates: productWidgets,
+      detailFilters: false,
+      projectDeclared: true,
+    }))
+  return [...builtInSpaces, ...declaredSpaces]
+}
 
 export const cloneDashboardLayout = (layout: readonly DashboardLayoutItem[]) =>
   JSON.parse(JSON.stringify(layout)) as DashboardLayoutItem[]

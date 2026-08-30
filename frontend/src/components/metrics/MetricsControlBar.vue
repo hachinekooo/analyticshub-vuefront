@@ -27,8 +27,18 @@ const emit = defineEmits<{
   customize: []
 }>()
 
-const { t } = useI18n()
-const isDetailSpace = computed(() => props.spaces.find((item) => item.key === props.space)?.detailFilters === true)
+const { t, locale } = useI18n()
+const activeWorkspace = computed(() => props.spaces.find((item) => item.key === props.space))
+const isDetailSpace = computed(() => activeWorkspace.value?.detailFilters === true)
+const workspaceLabel = (workspace: DashboardSpaceDefinition) => {
+  if (workspace.labelKey) return t(workspace.labelKey)
+  const preferred = locale.value === 'zh'
+    ? ['zh-CN', 'zh', 'default', 'en']
+    : ['en', 'default', 'zh-CN', 'zh']
+  return preferred.map((key) => workspace.displayName[key]).find(Boolean)
+    || Object.values(workspace.displayName)[0]
+    || workspace.key
+}
 </script>
 
 <template>
@@ -46,9 +56,12 @@ const isDetailSpace = computed(() => props.spaces.find((item) => item.key === pr
             :disabled="editing"
             @click="emit('update:space', workspace.key)"
           >
-            {{ t(workspace.labelKey) }}
+            {{ workspaceLabel(workspace) }}
           </button>
         </div>
+        <p v-if="activeWorkspace?.projectDeclared" class="workspace-context-note">
+          {{ t('metrics.projectDeclaredWorkspace') }}
+        </p>
       </div>
       <div class="control-actions">
         <el-button type="primary" :loading="refreshing" @click="emit('apply')">
@@ -160,6 +173,7 @@ const isDetailSpace = computed(() => props.spaces.find((item) => item.key === pr
   cursor: pointer;
 }
 .segmented-control button.is-active { color: #1d1d1f; font-weight: 600; background: white; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14); }
+.workspace-context-note { margin: 6px 0 0; color: var(--el-text-color-secondary); font-size: 12px; line-height: 1.45; }
 .filter-section { padding: 14px 18px; border-top: 1px solid var(--el-border-color-lighter); }
 .combined-filters { display: flex; align-items: stretch; gap: 20px; }
 .filter-group { min-width: 0; }

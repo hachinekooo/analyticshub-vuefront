@@ -48,8 +48,18 @@
     />
 
       <div class="workspace-area" :class="{ 'is-editing': isLayoutEditable }">
+        <div
+          v-if="layoutVisible && dashboardLayout.length === 0"
+          class="empty-dashboard"
+        >
+          <el-empty :description="t('metrics.emptyWorkspace')">
+            <el-button type="primary" plain @click="startLayoutEditing">
+              {{ t('metrics.emptyWorkspaceAction') }}
+            </el-button>
+          </el-empty>
+        </div>
         <grid-layout
-          v-if="layoutVisible"
+          v-else-if="layoutVisible"
           v-model:layout="dashboardLayout"
           :col-num="DASHBOARD_GRID.columns"
           :row-height="DASHBOARD_GRID.rowHeight"
@@ -681,7 +691,7 @@ import { getApiErrorMessage as getErrorMessage } from '@/utils/apiError'
 import { projectIdFromParam, projectRoute } from '@/utils/projectRoutes'
 import {
   cloneDashboardLayout,
-  dashboardSpacesForTemplate,
+  dashboardSpacesForProject,
   type DashboardLayoutItem,
   type DashboardSpaceKey,
 } from '@/features/dashboard/projectDashboardTemplate'
@@ -828,12 +838,13 @@ const dashboardGridStyle = {
   '--dashboard-grid-offset': `${DASHBOARD_GRID.gap}px`,
 }
 const dashboardGridPreview = ref<DashboardGridPreview | null>(null)
-const dashboardSpaces = computed(() => dashboardSpacesForTemplate(
+const serverDashboards = ref<AdminDashboard[]>([])
+const dashboardSpaces = computed(() => dashboardSpacesForProject(
   selectedProject.value?.analysisTemplate ?? 'app',
+  serverDashboards.value,
 ))
 const activeSpace = ref<DashboardSpaceKey>(dashboardSpaces.value[0]!.key)
 const dashboardLayout = ref<DashboardItem[]>([])
-const serverDashboards = ref<AdminDashboard[]>([])
 const dashboardDefaultRange = ref<DashboardDefaultRange>('7d')
 const dashboardSaving = ref(false)
 const layoutBeforeEditing = ref<DashboardItem[] | null>(null)
@@ -1679,6 +1690,10 @@ const loadLayout = async () => {
         || filters.projectId !== projectId
         || activeSpace.value !== space) return
       serverDashboards.value = response.data.data
+      if (!dashboardSpaces.value.some((candidate) => candidate.key === space)) {
+        activeSpace.value = dashboardSpaces.value[0]!.key
+        return
+      }
       const dashboard = serverDashboards.value.find(
         (item) => item.dashboardKey === space && item.isActive,
       )
@@ -2718,8 +2733,9 @@ const clearProjectScopedState = () => {
 // --- 8. Watchers & Lifecycle ---
 let workspaceGeneration = 0
 let bootstrapping = true
+let suppressNextSpaceActivation = false
 
-const alignActiveSpaceToTemplate = () => {
+const alignActiveSpaceToAvailableSpaces = () => {
   if (dashboardSpaces.value.some((space) => space.key === activeSpace.value)) return false
   activeSpace.value = dashboardSpaces.value[0]!.key
   return true
@@ -2796,6 +2812,10 @@ const activateWorkspace = async (projectChanged: boolean) => {
 }
 
 watch(activeSpace, () => {
+  if (suppressNextSpaceActivation) {
+    suppressNextSpaceActivation = false
+    return
+  }
   if (!bootstrapping) void activateWorkspace(false)
 })
 
@@ -2803,7 +2823,11 @@ watch(() => filters.projectId, () => {
   if (bootstrapping) return
   projectContext.selectProject(filters.projectId)
   resetProjectDetailFilters()
-  if (alignActiveSpaceToTemplate()) return
+  serverDashboards.value = []
+  if (!dashboardSpaces.value.some((space) => space.key === activeSpace.value)) {
+    suppressNextSpaceActivation = true
+    activeSpace.value = dashboardSpaces.value[0]!.key
+  }
   void activateWorkspace(true)
 })
 
@@ -2835,7 +2859,7 @@ onMounted(async () => {
   try {
     await projectContext.ensureLoaded(routeProjectId.value)
     filters.projectId = selectedProjectId.value
-    alignActiveSpaceToTemplate()
+    alignActiveSpaceToAvailableSpaces()
   } catch (error) {
     ElMessage.error(getErrorMessage(error, t('messages.loadProjectsFailed')))
   }
@@ -2883,6 +2907,12 @@ onUnmounted(() => {
   border-color: rgba(0, 0, 0, 0.1);
   -webkit-user-select: none;
   user-select: none;
+}
+
+.empty-dashboard {
+  min-height: calc(100vh - 340px);
+  display: grid;
+  place-items: center;
 }
 
 .dashboard-grid {
